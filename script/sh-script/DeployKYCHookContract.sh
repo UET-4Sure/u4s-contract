@@ -1,4 +1,4 @@
-forge script script/01_CreatePoolAndMintLiquidity.s.sol \
+forge script script/00_KYCHook.s.sol \
     --rpc-url $RPC_URL \
     --private-key $PRIVATE_KEY \
     --broadcast \
