@@ -15,7 +15,7 @@ contract Config {
     IERC20 constant token0 = IERC20(address(0x099b46d437014D6f234169654A73f4FB56faD10A));
     IERC20 constant token1 = IERC20(address(0x27D3Fd7B857cdc5CCA5C1898C12f09Ea9F8C8D37));
     // KYC Hook contract address
-    IHooks constant hookContract = IHooks(address(0xa4d2721BD0fBDcD2473F320842bE0C6DD9080a80));
+    IHooks constant hookContract = IHooks(address(0x84e78baD6d5AdC5dF0b6438a36bCE8Dd97b8CA80));
 
     Currency constant currency0 = Currency.wrap(address(token0));
     Currency constant currency1 = Currency.wrap(address(token1));
