@@ -28,8 +28,8 @@ contract KYCHook is BaseHook, Ownable {
         identitySBT = IIdentitySBT(_identitySBT);
     }
 
-    modifier onlyPermitKYC(address sender) {
-        require(identitySBT.hasToken(sender), "KYCHook: not permit kyc");
+    modifier onlyPermitKYC() {
+        require(identitySBT.hasToken(tx.origin), "KYCHook: not permit kyc");
         _;
     }
 
@@ -52,30 +52,31 @@ contract KYCHook is BaseHook, Ownable {
         });
     }
 
-    function _beforeSwap(address sender, PoolKey calldata key, IPoolManager.SwapParams calldata, bytes calldata)
-        internal
-        onlyPermitKYC(sender)
-        override
-        returns (bytes4, BeforeSwapDelta, uint24)
+    function _beforeSwap(
+        address, 
+        PoolKey calldata, 
+        IPoolManager.SwapParams calldata, 
+        bytes calldata
+    ) internal onlyPermitKYC() override returns (bytes4, BeforeSwapDelta, uint24)
     {
         return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0); 
     }
 
     function _beforeAddLiquidity(
-        address sender,
+        address,
         PoolKey calldata key,
         IPoolManager.ModifyLiquidityParams calldata,
         bytes calldata
-    ) internal onlyPermitKYC(sender) override returns (bytes4) {
+    ) internal onlyPermitKYC() override returns (bytes4) {
         return BaseHook.beforeAddLiquidity.selector;
     }
 
     function _beforeRemoveLiquidity(
-        address sender,
+        address,
         PoolKey calldata key,
         IPoolManager.ModifyLiquidityParams calldata,
         bytes calldata
-    ) internal onlyPermitKYC(sender) override returns (bytes4) {
+    ) internal onlyPermitKYC() override returns (bytes4) {
         return BaseHook.beforeRemoveLiquidity.selector;
     }
 }
