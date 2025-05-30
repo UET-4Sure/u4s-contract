@@ -55,10 +55,7 @@ contract KYCHookTest is Test, Fixtures {
 
         // Deploy mock IdentitySBT
         identitySBT = new MockIdentitySBT();
-        identitySBT.setKYC(address(this), true);
-        identitySBT.setKYC(address(manager), true);
-        identitySBT.setKYC(address(posm), true);
-        identitySBT.setKYC(address(swapRouter), true);
+        identitySBT.setKYC(tx.origin, true);
 
         // Deploy the hook to an address with the correct flags
         address flags = address(
@@ -111,10 +108,7 @@ contract KYCHookTest is Test, Fixtures {
 
     function testSwapWithoutKYC() public {
         // Revoke KYC
-        identitySBT.setKYC(address(this), false);
-        identitySBT.setKYC(address(manager), false);
-        identitySBT.setKYC(address(posm), false);
-        identitySBT.setKYC(address(swapRouter), false);
+        identitySBT.setKYC(tx.origin, false);
 
         // Test swap without KYC
         bool zeroForOne = true;
@@ -122,4 +116,87 @@ contract KYCHookTest is Test, Fixtures {
         vm.expectRevert();
         swap(key, zeroForOne, amountSpecified, ZERO_BYTES);
     }
+
+    function testAddLiquidityWithKYC() public {
+        // Test add liquidity with KYC'ed user
+        uint128 liquidityAmount = 1e18;
+        (uint256 amount0Expected, uint256 amount1Expected) = LiquidityAmounts.getAmountsForLiquidity(
+            SQRT_PRICE_1_1,
+            TickMath.getSqrtPriceAtTick(tickLower),
+            TickMath.getSqrtPriceAtTick(tickUpper),
+            liquidityAmount
+        );
+
+        (uint256 newTokenId,) = posm.mint(
+            key,
+            tickLower,
+            tickUpper,
+            liquidityAmount,
+            amount0Expected + 1,
+            amount1Expected + 1,
+            address(this),
+            block.timestamp,
+            ZERO_BYTES
+        );
+        assertTrue(newTokenId > 0, "Should mint position");
+    }
+
+    // function testAddLiquidityWithoutKYC() public {
+    //     // Revoke KYC
+    //     identitySBT.setKYC(tx.origin, false);
+
+    //     // Test add liquidity without KYC
+    //     uint128 liquidityAmount = 1e18;
+    //     (uint256 amount0Expected, uint256 amount1Expected) = LiquidityAmounts.getAmountsForLiquidity(
+    //         SQRT_PRICE_1_1,
+    //         TickMath.getSqrtPriceAtTick(tickLower),
+    //         TickMath.getSqrtPriceAtTick(tickUpper),
+    //         liquidityAmount
+    //     );
+    //     vm.expectRevert();
+    //     posm.mint(
+    //         key,
+    //         tickLower,
+    //         tickUpper,
+    //         liquidityAmount,
+    //         amount0Expected + 1,
+    //         amount1Expected + 1,
+    //         tx.origin,
+    //         block.timestamp,
+    //         ZERO_BYTES
+    //     );
+    // }
+
+    function testRemoveLiquidityWithKYC() public {
+        // Test remove liquidity with KYC'ed user
+        uint128 liquidityAmount = 1e18;
+        posm.decreaseLiquidity(
+            tokenId,
+            liquidityAmount,
+            MAX_SLIPPAGE_REMOVE_LIQUIDITY,
+            MAX_SLIPPAGE_REMOVE_LIQUIDITY,
+            address(this),
+            block.timestamp,
+            ZERO_BYTES
+        );
+    }
+
+    // function testRemoveLiquidityWithoutKYC() public {
+    //     // Revoke KYC
+    //     identitySBT.setKYC(tx.origin, false);
+
+    //     // Test remove liquidity without KYC
+    //     uint128 liquidityAmount = 1e18;
+    //     vm.prank(tx.origin);
+    //     vm.expectRevert();
+    //     posm.decreaseLiquidity(
+    //         tokenId,
+    //         liquidityAmount,
+    //         MAX_SLIPPAGE_REMOVE_LIQUIDITY,
+    //         MAX_SLIPPAGE_REMOVE_LIQUIDITY,
+    //         tx.origin,
+    //         block.timestamp,
+    //         ZERO_BYTES
+    //     );
+    // }
 } 
