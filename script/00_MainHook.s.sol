@@ -6,28 +6,27 @@ import {Hooks} from "v4-core/src/libraries/Hooks.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 
 import {Constants} from "./base/Constants.sol";
-import {Counter} from "../src/Counter.sol";
 import {HookMiner} from "v4-periphery/src/utils/HookMiner.sol";
+import {MainHook} from "../src/MainHook.sol";
 
-/// @notice Mines the address and deploys the Counter.sol Hook contract
-contract CounterScript is Script, Constants {
+/// @notice Mines the address and deploys the MainHook.sol Hook contract
+contract MainHookScript is Script, Constants {
     function setUp() public {}
 
     function run() public {
         // hook contracts must have specific flags encoded in the address
         uint160 flags = uint160(
-            Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG
-                | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG
+            Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG
         );
 
         // Mine a salt that will produce a hook address with the correct flags
-        bytes memory constructorArgs = abi.encode(POOLMANAGER);
+        bytes memory constructorArgs = abi.encode(POOLMANAGER, IDENTITY_SBT);
         (address hookAddress, bytes32 salt) =
-            HookMiner.find(CREATE2_DEPLOYER, flags, type(Counter).creationCode, constructorArgs);
+            HookMiner.find(CREATE2_DEPLOYER, flags, type(MainHook).creationCode, constructorArgs);
 
         // Deploy the hook using CREATE2
         vm.broadcast();
-        Counter counter = new Counter{salt: salt}(IPoolManager(POOLMANAGER));
-        require(address(counter) == hookAddress, "CounterScript: hook address mismatch");
+        MainHook mainHook = new MainHook{salt: salt}(IPoolManager(POOLMANAGER), IDENTITY_SBT);
+        require(address(mainHook) == hookAddress, "MainHookScript: hook address mismatch");
     }
 }

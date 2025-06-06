@@ -9,11 +9,11 @@ import {Currency} from "v4-core/src/types/Currency.sol";
 contract Config {
 
     // TOKEN ADDRESS
-    IERC20 constant USDC = IERC20(address(0x7cE3f087D7C5c215cFe817dB8aCb5d72a99F24D4));
-    IERC20 constant WETH = IERC20(address(0xc45dDDe92509308b0E22d2a87B3E04e5fdf6f397));
-    IERC20 constant WBTC = IERC20(address(0x3d2E50ED0bd344dAA1FE4779099F65f05f93960c));
-    IERC20 constant LINK = IERC20(address(0x8ff8Ac069AdB98c0385F15e0390D71e40612C615));
-    IERC20 constant EUR = IERC20(address(0x68197D8f47D7ABD3E2307Bf0f7707213Fc416c52));
+    IERC20 constant USDC = IERC20(address(0x0ff5065E79c051c3D4C790BC9e8ebc9b4E56bbcc));
+    IERC20 constant WETH = IERC20(address(0x342d6127609A5Ad63C93E10cb73b7d9dE9bC43Aa));
+    IERC20 constant WBTC = IERC20(address(0x12Df3798C30532c068306372d24c9f2f451676e9));
+    IERC20 constant LINK = IERC20(address(0x88B42E9E9E769F86ab499D8cb111fcb6f691F70E));
+    IERC20 constant EUR = IERC20(address(0x336d87aEdF99d5Fb4F07132C8DbE4bea4c766eAc));
 
     // CURRENCY
     Currency constant usdc = Currency.wrap(address(USDC));
@@ -30,5 +30,11 @@ contract Config {
     address public constant EUR_PRICE_FEED = 0x1a81afB8146aeFfCFc5E50e8479e826E7D55b910;
 
     // KYC Hook contract address
-    IHooks constant hookContract = IHooks(address(0x84e78baD6d5AdC5dF0b6438a36bCE8Dd97b8CA80));
+    IHooks constant hookContract = IHooks(address(0x43C5d270ea5C0D4c509747578486F977CFC50a80));
+
+    // TOKEN & CURRENCY for pool
+    IERC20 constant token0 = USDC;
+    IERC20 constant token1 = WETH;
+    Currency constant currency0 = usdc;
+    Currency constant currency1 = weth;
 }
