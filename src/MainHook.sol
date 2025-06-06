@@ -10,28 +10,17 @@ import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/src/types/BeforeSwapDelta.sol";
 
-import {IIdentitySBT} from "./interfaces/IIdentitySBT.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {KYCContract} from "./KYCContract.sol";
 
-/**
- * Only KYC'ed people can trade on the V4 hook'ed pool.
- */
-contract KYCHook is BaseHook, Ownable {
+
+contract MainHook is BaseHook, Ownable, KYCContract {
     using PoolIdLibrary for PoolKey;
-    IIdentitySBT public identitySBT;
-
 
     constructor(
         IPoolManager _poolManager,
         address _identitySBT
-    ) BaseHook(_poolManager) Ownable(msg.sender) {
-        identitySBT = IIdentitySBT(_identitySBT);
-    }
-
-    modifier onlyPermitKYC() {
-        require(identitySBT.hasToken(tx.origin), "KYCHook: not permit kyc");
-        _;
-    }
+    ) BaseHook(_poolManager) Ownable(msg.sender) KYCContract(_identitySBT) {}
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({

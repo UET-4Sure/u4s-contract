@@ -11,7 +11,7 @@ import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {CurrencyLibrary, Currency} from "v4-core/src/types/Currency.sol";
 import {PoolSwapTest} from "v4-core/src/test/PoolSwapTest.sol";
-import {KYCHook} from "../src/KYCHook.sol";
+import {MainHook} from "../src/MainHook.sol";
 import {StateLibrary} from "v4-core/src/libraries/StateLibrary.sol";
 import {IIdentitySBT} from "../src/interfaces/IIdentitySBT.sol";
 
@@ -38,7 +38,7 @@ contract KYCHookTest is Test, Fixtures {
     using CurrencyLibrary for Currency;
     using StateLibrary for IPoolManager;
 
-    KYCHook hook;
+    MainHook hook;
     PoolId poolId;
     MockIdentitySBT identitySBT;
 
@@ -64,8 +64,8 @@ contract KYCHookTest is Test, Fixtures {
             ) ^ (0x4444 << 144) // Namespace the hook to avoid collisions
         );
         bytes memory constructorArgs = abi.encode(manager, address(identitySBT));
-        deployCodeTo("KYCHook.sol:KYCHook", constructorArgs, flags);
-        hook = KYCHook(flags);
+        deployCodeTo("MainHook.sol:MainHook", constructorArgs, flags);
+        hook = MainHook(flags);
 
         // Create the pool
         key = PoolKey(currency0, currency1, 3000, 60, IHooks(hook));

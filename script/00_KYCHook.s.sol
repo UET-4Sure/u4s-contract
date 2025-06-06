@@ -7,7 +7,7 @@ import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 
 import {Constants} from "./base/Constants.sol";
 import {HookMiner} from "v4-periphery/src/utils/HookMiner.sol";
-import {KYCHook} from "../src/KYCHook.sol";
+import {MainHook} from "../src/MainHook.sol";
 
 /// @notice Mines the address and deploys the KYCHook.sol Hook contract
 contract KYCHookScript is Script, Constants {
@@ -22,11 +22,11 @@ contract KYCHookScript is Script, Constants {
         // Mine a salt that will produce a hook address with the correct flags
         bytes memory constructorArgs = abi.encode(POOLMANAGER, IDENTITY_SBT);
         (address hookAddress, bytes32 salt) =
-            HookMiner.find(CREATE2_DEPLOYER, flags, type(KYCHook).creationCode, constructorArgs);
+            HookMiner.find(CREATE2_DEPLOYER, flags, type(MainHook).creationCode, constructorArgs);
 
         // Deploy the hook using CREATE2
         vm.broadcast();
-        KYCHook kycHook = new KYCHook{salt: salt}(IPoolManager(POOLMANAGER), IDENTITY_SBT);
+        MainHook kycHook = new MainHook{salt: salt}(IPoolManager(POOLMANAGER), IDENTITY_SBT);
         require(address(kycHook) == hookAddress, "KYCHookScript: hook address mismatch");
     }
 }
