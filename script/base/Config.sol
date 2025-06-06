@@ -7,20 +7,21 @@ import {Currency} from "v4-core/src/types/Currency.sol";
 
 /// @notice Shared configuration between scripts
 contract Config {
+    mapping(address => address) public priceFeeds;
 
     // TOKEN ADDRESS
-    IERC20 constant USDC = IERC20(address(0x0ff5065E79c051c3D4C790BC9e8ebc9b4E56bbcc));
-    IERC20 constant WETH = IERC20(address(0x342d6127609A5Ad63C93E10cb73b7d9dE9bC43Aa));
-    IERC20 constant WBTC = IERC20(address(0x12Df3798C30532c068306372d24c9f2f451676e9));
-    IERC20 constant LINK = IERC20(address(0x88B42E9E9E769F86ab499D8cb111fcb6f691F70E));
-    IERC20 constant EUR = IERC20(address(0x336d87aEdF99d5Fb4F07132C8DbE4bea4c766eAc));
+    address constant USDC = address(0x0ff5065E79c051c3D4C790BC9e8ebc9b4E56bbcc);
+    address constant WETH = address(0x342d6127609A5Ad63C93E10cb73b7d9dE9bC43Aa);
+    address constant WBTC = address(0x12Df3798C30532c068306372d24c9f2f451676e9);
+    address constant LINK = address(0x88B42E9E9E769F86ab499D8cb111fcb6f691F70E);
+    address constant EUR = address(0x336d87aEdF99d5Fb4F07132C8DbE4bea4c766eAc);
 
     // CURRENCY
-    Currency constant usdc = Currency.wrap(address(USDC));
-    Currency constant weth = Currency.wrap(address(WETH));
-    Currency constant wbtc = Currency.wrap(address(WBTC));
-    Currency constant link = Currency.wrap(address(LINK));
-    Currency constant eur = Currency.wrap(address(EUR));
+    Currency constant usdc = Currency.wrap(USDC);
+    Currency constant weth = Currency.wrap(WETH);
+    Currency constant wbtc = Currency.wrap(WBTC);
+    Currency constant link = Currency.wrap(LINK);
+    Currency constant eur = Currency.wrap(EUR);
 
     // PRICE FEED ADDRESS
     address public constant USDC_PRICE_FEED = 0xA2F78ab2355fe2f984D808B5CeE7FD0A93D5270E;
@@ -36,8 +37,16 @@ contract Config {
     IHooks constant hookContract = IHooks(address(0x43C5d270ea5C0D4c509747578486F977CFC50a80));
 
     // TOKEN & CURRENCY for pool
-    IERC20 constant token0 = USDC;
-    IERC20 constant token1 = WETH;
+    IERC20 constant token0 = IERC20(USDC);
+    IERC20 constant token1 = IERC20(WETH);
     Currency constant currency0 = usdc;
     Currency constant currency1 = weth;
+
+    constructor() {
+        priceFeeds[USDC] = USDC_PRICE_FEED;
+        priceFeeds[WETH] = WETH_PRICE_FEED;
+        priceFeeds[WBTC] = WBTC_PRICE_FEED;
+        priceFeeds[LINK] = LINK_PRICE_FEED;
+        priceFeeds[EUR] = EUR_PRICE_FEED;
+    }
 }

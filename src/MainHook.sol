@@ -11,16 +11,20 @@ import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/src/types/BeforeSwapDelta.sol";
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {KYCContract} from "./KYCContract.sol";
+import {IKYCContract} from "./interfaces/IKYCContract.sol";
+import {Currency} from "v4-core/src/types/Currency.sol";
 
 
-contract MainHook is BaseHook, Ownable, KYCContract {
+contract MainHook is BaseHook, Ownable {
     using PoolIdLibrary for PoolKey;
+    IKYCContract kycContract;
 
     constructor(
         IPoolManager _poolManager,
-        address _identitySBT
-    ) BaseHook(_poolManager) Ownable(msg.sender) KYCContract(_identitySBT) {}
+        address _kycContract
+    ) BaseHook(_poolManager) Ownable(msg.sender) {
+        kycContract = IKYCContract(_kycContract);
+    }
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
@@ -43,11 +47,33 @@ contract MainHook is BaseHook, Ownable, KYCContract {
 
     function _beforeSwap(
         address, 
-        PoolKey calldata, 
-        IPoolManager.SwapParams calldata, 
+        PoolKey calldata key, 
+        IPoolManager.SwapParams calldata params, 
         bytes calldata
-    ) internal onlyPermitKYC() override returns (bytes4, BeforeSwapDelta, uint24)
+    ) internal override returns (bytes4, BeforeSwapDelta, uint24)
     {
+        // exact out
+        uint256 amount = uint256(params.amountSpecified);
+        address token;
+
+        if(params.zeroForOne) {
+            if(params.amountSpecified > 0) {
+                token = Currency.unwrap(key.currency1);
+            } else {
+                token = Currency.unwrap(key.currency0);
+            }
+        } else {
+            if(params.amountSpecified > 0) {   
+                token = Currency.unwrap(key.currency0);
+            } else {
+                token = Currency.unwrap(key.currency1);
+            }
+        }
+
+        if(!kycContract.isPermitKYC(amount, token)) {
+            revert("MainHook: not permit kyc");
+        }
+
         return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0); 
     }
 
@@ -56,7 +82,7 @@ contract MainHook is BaseHook, Ownable, KYCContract {
         PoolKey calldata key,
         IPoolManager.ModifyLiquidityParams calldata,
         bytes calldata
-    ) internal onlyPermitKYC() override returns (bytes4) {
+    ) internal override returns (bytes4) {
         return BaseHook.beforeAddLiquidity.selector;
     }
 
@@ -65,7 +91,7 @@ contract MainHook is BaseHook, Ownable, KYCContract {
         PoolKey calldata key,
         IPoolManager.ModifyLiquidityParams calldata,
         bytes calldata
-    ) internal onlyPermitKYC() override returns (bytes4) {
+    ) internal override returns (bytes4) {
         return BaseHook.beforeRemoveLiquidity.selector;
     }
 }
