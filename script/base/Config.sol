@@ -29,6 +29,9 @@ contract Config {
     address public constant LINK_PRICE_FEED = 0xc59E3633BAAC79493d908e63626716e204A45EdF;
     address public constant EUR_PRICE_FEED = 0x1a81afB8146aeFfCFc5E50e8479e826E7D55b910;
 
+    // IDENTITY SBT ADDRESS
+    address constant IDENTITY_SBT = address(0xb117d1c006fC208FEAFFE5E08529BE5de8235B73);
+
     // KYC Hook contract address
     IHooks constant hookContract = IHooks(address(0x43C5d270ea5C0D4c509747578486F977CFC50a80));
 

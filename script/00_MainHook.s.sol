@@ -5,12 +5,13 @@ import "forge-std/Script.sol";
 import {Hooks} from "v4-core/src/libraries/Hooks.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 
+import {Config} from "./base/Config.sol";
 import {Constants} from "./base/Constants.sol";
 import {HookMiner} from "v4-periphery/src/utils/HookMiner.sol";
 import {MainHook} from "../src/MainHook.sol";
 
 /// @notice Mines the address and deploys the MainHook.sol Hook contract
-contract MainHookScript is Script, Constants {
+contract MainHookScript is Script, Config, Constants {
     function setUp() public {}
 
     function run() public {
