@@ -45,7 +45,7 @@ contract KYCContractTest is Test {
         oracle.setPrice(1); // 1 USD with 8 decimals
         
         // Test with amount under $500
-        assertTrue(kycContract.isPermitKYC(100 * 10**18, address(usdc)));
+        assertTrue(kycContract.isPermitKYCSwap(100 * 10**18, address(usdc)));
     }
 
     function test_IsPermitKYC_OverLimit() public {
@@ -53,7 +53,7 @@ contract KYCContractTest is Test {
         oracle.setPrice(1);
         
         // Test with amount over $10000
-        assertFalse(kycContract.isPermitKYC(20000 * 10**18, address(usdc)));
+        assertFalse(kycContract.isPermitKYCSwap(20000 * 10**18, address(usdc)));
     }
 
     function test_IsPermitKYC_WithKYC() public {
@@ -65,7 +65,7 @@ contract KYCContractTest is Test {
         
         // Test with amount over $500 but user has KYC
         vm.prank(tx.origin);
-        assertTrue(kycContract.isPermitKYC(1000 * 10**18, address(usdc)));
+        assertTrue(kycContract.isPermitKYCSwap(1000 * 10**18, address(usdc)));
     }
 
     function test_IsPermitKYC_WithoutKYC() public {
@@ -74,6 +74,6 @@ contract KYCContractTest is Test {
         
         // Test with amount over $500 but user has not KYC
         vm.prank(tx.origin);
-        assertFalse(kycContract.isPermitKYC(1000 * 10**18, address(usdc)));
+        assertFalse(kycContract.isPermitKYCSwap(1000 * 10**18, address(usdc)));
     }
 } 

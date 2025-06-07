@@ -18,8 +18,10 @@ contract KYCContract is Config, Ownable {
     mapping(address => bool) private _restrictedTokens;
     
     // Configurable volume limits
-    uint256 public minVolume;
-    uint256 public maxVolume;
+    uint256 public minVolumeSwap;
+    uint256 public maxVolumeSwap;
+    uint256 public minVolumeModifyLiquidity;
+    uint256 public maxVolumeModifyLiquidity;
     
     // Events
     event RestrictedUsersUpdated(address[] users, bool[] restricted);
@@ -39,8 +41,10 @@ contract KYCContract is Config, Ownable {
         if (_identitySBT == address(0)) revert("Invalid identity SBT address");
         
         identitySBT = IIdentitySBT(_identitySBT);
-        minVolume = 500 * 10**18;
-        maxVolume = 10000 * 10**18;
+        minVolumeSwap = 500 * 10**18;
+        maxVolumeSwap = 10000 * 10**18;
+        minVolumeModifyLiquidity = 500 * 10**18;
+        maxVolumeModifyLiquidity = 1000000 * 10**18;
     }
 
     /**
@@ -49,24 +53,24 @@ contract KYCContract is Config, Ownable {
      * @param token The token address
      * @return bool Whether the transaction is permitted
      */
-    function isPermitKYC(uint256 amount, address token) public view returns (bool) {
-        address priceFeed = priceFeeds[token];
-        if (priceFeed == address(0)) revert PriceFeedNotSet();
-        uint256 price = uint256(Oracle(priceFeed).getChainlinkDataFeedLatestAnswer());
-        uint256 volume = amount * price;
-
+    function isPermitKYCSwap(uint256 amount, address token) public view returns (bool) {
         // Check restrictions
         if (_restrictedUsers[tx.origin] || _restrictedTokens[token]) {
             return false;
         }
 
+        address priceFeed = priceFeeds[token];
+        if (priceFeed == address(0)) revert PriceFeedNotSet();
+        uint256 price = uint256(Oracle(priceFeed).getChainlinkDataFeedLatestAnswer());
+        uint256 volume = amount * price;        
+
         // Allow transactions below minimum volume
-        if (volume <= minVolume) {
+        if (volume <= minVolumeSwap) {
             return true;
         }
 
         // Reject transactions above maximum volume
-        if (volume > maxVolume) {
+        if (volume > maxVolumeSwap) {
             return false;
         }
 
@@ -75,15 +79,66 @@ contract KYCContract is Config, Ownable {
     }
 
     /**
+     * @dev Checks if a modify liquidity transaction is permitted based on KYC and volume restrictions
+     * @param amount0 The amount of token0
+     * @param token0 The token0 address
+     * @param amount1 The amount of token1
+     * @param token1 The token1 address
+     * @return bool Whether the transaction is permitted
+     */
+    function isPermitKYCModifyLiquidity(
+        uint256 amount0, 
+        address token0, 
+        uint256 amount1, 
+        address token1
+    ) public view returns (bool) {
+        // Check restrictions
+        if (_restrictedUsers[tx.origin] || _restrictedTokens[token0] || _restrictedTokens[token1]) {
+            return false;
+        }
+
+        address priceFeed0 = priceFeeds[token0];
+        address priceFeed1 = priceFeeds[token1];
+        if (priceFeed0 == address(0) || priceFeed1 == address(0)) revert PriceFeedNotSet();
+        uint256 price0 = uint256(Oracle(priceFeed0).getChainlinkDataFeedLatestAnswer());
+        uint256 price1 = uint256(Oracle(priceFeed1).getChainlinkDataFeedLatestAnswer());
+        uint256 totalVolume = amount0 * price0 + amount1 * price1;
+
+        if(totalVolume <= minVolumeModifyLiquidity) {
+            return true;
+        }
+
+        if(totalVolume > maxVolumeModifyLiquidity) {
+            return false;
+        }
+
+        return identitySBT.hasToken(tx.origin);
+    }
+
+    /**
      * @dev Updates the volume limits
      * @param _minVolume New minimum volume
      * @param _maxVolume New maximum volume
      */
-    function setVolumeLimits(uint256 _minVolume, uint256 _maxVolume) external onlyOwner {
+    function setVolumeLimitsSwap(uint256 _minVolume, uint256 _maxVolume) external onlyOwner {
         if (_minVolume >= _maxVolume) revert InvalidVolumeLimits();
         
-        minVolume = _minVolume;
-        maxVolume = _maxVolume;
+        minVolumeSwap = _minVolume;
+        maxVolumeSwap = _maxVolume;
+        
+        emit VolumeLimitsUpdated(_minVolume, _maxVolume);
+    }
+
+    /**
+     * @dev Updates the volume limits for modify liquidity
+     * @param _minVolume New minimum volume
+     * @param _maxVolume New maximum volume
+     */
+    function setVolumeLimitsModifyLiquidity(uint256 _minVolume, uint256 _maxVolume) external onlyOwner {
+        if (_minVolume >= _maxVolume) revert InvalidVolumeLimits();
+        
+        minVolumeModifyLiquidity = _minVolume;
+        maxVolumeModifyLiquidity = _maxVolume;
         
         emit VolumeLimitsUpdated(_minVolume, _maxVolume);
     }

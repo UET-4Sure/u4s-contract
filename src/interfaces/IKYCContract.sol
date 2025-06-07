@@ -8,7 +8,17 @@ interface IKYCContract {
         @param token the token address
         @return true if the user is permit kyc, false otherwise
     */
-    function isPermitKYC(uint256 amount, address token) external view returns (bool);
+    function isPermitKYCSwap(uint256 amount, address token) external view returns (bool);
+
+    /**
+        @dev check if the user is permit kyc
+        @param amount0 the amount of token0
+        @param token0 the token0 address
+        @param amount1 the amount of token1
+        @param token1 the token1 address
+        @return true if the user is permit kyc, false otherwise
+    */
+    function isPermitKYCModifyLiquidity(uint256 amount0, address token0, uint256 amount1, address token1) external view returns (bool);
 
     /**
         @dev set restricted users

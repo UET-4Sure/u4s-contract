@@ -13,10 +13,14 @@ import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/src/types/BeforeS
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IKYCContract} from "./interfaces/IKYCContract.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
+import {TickMath} from "v4-core/src/libraries/TickMath.sol";
+import {LiquidityAmounts} from "lib/uniswap-hooks/lib/v4-periphery/lib/v4-core/test/utils/LiquidityAmounts.sol";
+import {StateLibrary} from "lib/uniswap-hooks/lib/v4-core/src/libraries/StateLibrary.sol";
 
 
 contract MainHook is BaseHook, Ownable {
     using PoolIdLibrary for PoolKey;
+    using StateLibrary for IPoolManager;
     IKYCContract kycContract;
 
     constructor(
@@ -69,8 +73,8 @@ contract MainHook is BaseHook, Ownable {
             }
         }
 
-        if(!kycContract.isPermitKYC(amount, token)) {
-            revert("MainHook: not permit kyc");
+        if(!kycContract.isPermitKYCSwap(amount, token)) {
+            revert("MainHook: not permit kyc swap");
         }
 
         return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0); 
@@ -79,18 +83,68 @@ contract MainHook is BaseHook, Ownable {
     function _beforeAddLiquidity(
         address,
         PoolKey calldata key,
-        IPoolManager.ModifyLiquidityParams calldata,
+        IPoolManager.ModifyLiquidityParams calldata params,
         bytes calldata
     ) internal override returns (bytes4) {
+        // Get current sqrt price
+        bytes32 stateSlot = keccak256(abi.encode(key.toId(), uint256(0)));
+        bytes32 data = poolManager.extsload(stateSlot);
+        uint160 sqrtPriceX96 = uint160(uint256(data));
+        
+        // Get sqrt prices for the range
+        uint160 sqrtPriceAX96 = TickMath.getSqrtPriceAtTick(params.tickLower);
+        uint160 sqrtPriceBX96 = TickMath.getSqrtPriceAtTick(params.tickUpper);
+        
+        // Calculate amounts for the given liquidity
+        (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
+            sqrtPriceX96,
+            sqrtPriceAX96,
+            sqrtPriceBX96,
+            uint128(uint256(params.liquidityDelta))
+        );
+
+        if(!kycContract.isPermitKYCModifyLiquidity(
+            amount0, 
+            Currency.unwrap(key.currency0),
+            amount1,
+            Currency.unwrap(key.currency1)
+        )) {
+            revert("MainHook: not permit kyc add liquidity");
+        }
+
         return BaseHook.beforeAddLiquidity.selector;
     }
 
     function _beforeRemoveLiquidity(
         address,
         PoolKey calldata key,
-        IPoolManager.ModifyLiquidityParams calldata,
+        IPoolManager.ModifyLiquidityParams calldata params,
         bytes calldata
     ) internal override returns (bytes4) {
+        // Get current sqrt price
+        bytes32 stateSlot = keccak256(abi.encode(key.toId(), uint256(0)));
+        bytes32 data = poolManager.extsload(stateSlot);
+        uint160 sqrtPriceX96 = uint160(uint256(data));
+        
+        // Get sqrt prices for the range
+        uint160 sqrtPriceAX96 = TickMath.getSqrtPriceAtTick(params.tickLower);
+        uint160 sqrtPriceBX96 = TickMath.getSqrtPriceAtTick(params.tickUpper);
+        // Calculate amounts for the given liquidity
+        (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
+            sqrtPriceX96,
+            sqrtPriceAX96,
+            sqrtPriceBX96,
+            uint128(uint256(params.liquidityDelta))
+        );  
+
+        if(!kycContract.isPermitKYCModifyLiquidity(
+            amount0, 
+            Currency.unwrap(key.currency0),
+            amount1,
+            Currency.unwrap(key.currency1)
+        )) {
+            revert("MainHook: not permit kyc remove liquidity");
+        }
         return BaseHook.beforeRemoveLiquidity.selector;
     }
 }
