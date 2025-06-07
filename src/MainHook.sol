@@ -52,7 +52,6 @@ contract MainHook is BaseHook, Ownable {
         bytes calldata
     ) internal override returns (bytes4, BeforeSwapDelta, uint24)
     {
-        // exact out
         uint256 amount = params.amountSpecified > 0 ? uint256(params.amountSpecified) : uint256(-params.amountSpecified);
         address token;
 

@@ -11,6 +11,9 @@ contract KYCContract is Config, Ownable {
     IIdentitySBT public identitySBT;
     mapping(address => bool) restrictedUsers;
     mapping(address => bool) restrictedTokens;
+    
+    uint256 public MIN_VOLUME = 500 * 10 ** 18; // 500 USD
+    uint256 public MAX_VOLUME = 10000 * 10 ** 18; // 10000 USD
 
     constructor(address _identitySBT) Ownable(msg.sender) {
         identitySBT = IIdentitySBT(_identitySBT);
@@ -22,6 +25,10 @@ contract KYCContract is Config, Ownable {
         @param token the token address
     */
     function isPermitKYC(uint256 amount, address token) public view returns (bool) {
+        if(priceFeeds[token] == address(0)) {
+            revert("KYCContract: price feed not set");
+        }
+
         Oracle oracle = Oracle(priceFeeds[token]);
         uint256 price = uint256(oracle.getChainlinkDataFeedLatestAnswer());
         uint256 volume = amount * price;
@@ -32,12 +39,12 @@ contract KYCContract is Config, Ownable {
         }
 
         // if the volume is less than 500 USD, return true
-        if(volume <= 500 * 10 ** 18) {
+        if(volume <= MIN_VOLUME) {
             return true;
         }
 
         // if the volume is greater than 10000 USD, return false
-        if(volume > 10000 * 10 ** 18) {
+        if(volume > MAX_VOLUME) {
             return false;
         }
 
@@ -70,6 +77,22 @@ contract KYCContract is Config, Ownable {
             restrictedTokens[tokens[i]] = restricted[i];
         }
     }   
+
+    /**
+        @dev set min volume
+        @param minVolume the min volume
+    */
+    function setMinVolume(uint256 minVolume) public onlyOwner {
+        MIN_VOLUME = minVolume;
+    }
+
+    /**
+        @dev set max volume
+        @param maxVolume the max volume
+    */
+    function setMaxVolume(uint256 maxVolume) public onlyOwner {
+        MAX_VOLUME = maxVolume;
+    }
 
 
     //////////////////////////////
