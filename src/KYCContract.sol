@@ -7,104 +7,143 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Oracle} from "./Oracle.sol";
 import {console} from "forge-std/console.sol";
 
+/**
+ * @title KYCContract
+ * @dev Manages KYC verification and volume restrictions for token transactions
+ */
 contract KYCContract is Config, Ownable {
-    IIdentitySBT public identitySBT;
-    mapping(address => bool) restrictedUsers;
-    mapping(address => bool) restrictedTokens;
+    // State variables
+    IIdentitySBT public immutable identitySBT;
+    mapping(address => bool) private _restrictedUsers;
+    mapping(address => bool) private _restrictedTokens;
     
-    uint256 public MIN_VOLUME = 500 * 10 ** 18; // 500 USD
-    uint256 public MAX_VOLUME = 10000 * 10 ** 18; // 10000 USD
+    // Configurable volume limits
+    uint256 public minVolume;
+    uint256 public maxVolume;
+    
+    // Events
+    event RestrictedUsersUpdated(address[] users, bool[] restricted);
+    event RestrictedTokensUpdated(address[] tokens, bool[] restricted);
+    event PriceFeedSet(address token, address priceFeed);
+    event VolumeLimitsUpdated(uint256 minVolume, uint256 maxVolume);
 
-    constructor(address _identitySBT) Ownable(msg.sender) {
+    // Errors
+    error PriceFeedNotSet();
+    error InvalidInputLength();
+    error Unauthorized();
+    error InvalidVolumeLimits();
+
+    constructor(
+        address _identitySBT
+    ) Ownable(msg.sender) {
+        if (_identitySBT == address(0)) revert("Invalid identity SBT address");
+        
         identitySBT = IIdentitySBT(_identitySBT);
+        minVolume = 500 * 10**18;
+        maxVolume = 10000 * 10**18;
     }
 
     /**
-        @dev check if the user is permit kyc
-        @param amount the amount of the token
-        @param token the token address
-    */
+     * @dev Checks if a transaction is permitted based on KYC and volume restrictions
+     * @param amount The amount of the token
+     * @param token The token address
+     * @return bool Whether the transaction is permitted
+     */
     function isPermitKYC(uint256 amount, address token) public view returns (bool) {
-        if(priceFeeds[token] == address(0)) {
-            revert("KYCContract: price feed not set");
-        }
-
-        Oracle oracle = Oracle(priceFeeds[token]);
-        uint256 price = uint256(oracle.getChainlinkDataFeedLatestAnswer());
+        address priceFeed = priceFeeds[token];
+        if (priceFeed == address(0)) revert PriceFeedNotSet();
+        uint256 price = uint256(Oracle(priceFeed).getChainlinkDataFeedLatestAnswer());
         uint256 volume = amount * price;
 
-        // if the user is restricted, return false
-        if(restrictedUsers[tx.origin] || restrictedTokens[token]) {
+        // Check restrictions
+        if (_restrictedUsers[tx.origin] || _restrictedTokens[token]) {
             return false;
         }
 
-        // if the volume is less than 500 USD, return true
-        if(volume <= MIN_VOLUME) {
+        // Allow transactions below minimum volume
+        if (volume <= minVolume) {
             return true;
         }
 
-        // if the volume is greater than 10000 USD, return false
-        if(volume > MAX_VOLUME) {
+        // Reject transactions above maximum volume
+        if (volume > maxVolume) {
             return false;
         }
 
-        // if the user is kyc, return true
-        if(identitySBT.hasToken(tx.origin)) {
-            return true;
+        // For transactions between min and max volume, require KYC
+        return identitySBT.hasToken(tx.origin);
+    }
+
+    /**
+     * @dev Updates the volume limits
+     * @param _minVolume New minimum volume
+     * @param _maxVolume New maximum volume
+     */
+    function setVolumeLimits(uint256 _minVolume, uint256 _maxVolume) external onlyOwner {
+        if (_minVolume >= _maxVolume) revert InvalidVolumeLimits();
+        
+        minVolume = _minVolume;
+        maxVolume = _maxVolume;
+        
+        emit VolumeLimitsUpdated(_minVolume, _maxVolume);
+    }
+
+    /**
+     * @dev Updates the restricted status of multiple users
+     * @param users Array of user addresses
+     * @param restricted Array of restricted statuses
+     */
+    function setRestrictedUsers(address[] calldata users, bool[] calldata restricted) external onlyOwner {
+        if (users.length != restricted.length) revert InvalidInputLength();
+        
+        for (uint256 i = 0; i < users.length; i++) {
+            _restrictedUsers[users[i]] = restricted[i];
         }
-
-        return false;
+        
+        emit RestrictedUsersUpdated(users, restricted);
     }
 
     /**
-        @dev set restricted users
-        @param users the users to set
-        @param restricted the restricted status
-    */
-    function setRestrictedUsers(address[] calldata users, bool[] calldata restricted) public onlyOwner {
-        for(uint256 i = 0; i < users.length; i++) {
-            restrictedUsers[users[i]] = restricted[i];
+     * @dev Updates the restricted status of multiple tokens
+     * @param tokens Array of token addresses
+     * @param restricted Array of restricted statuses
+     */
+    function setRestrictedTokens(address[] calldata tokens, bool[] calldata restricted) external onlyOwner {
+        if (tokens.length != restricted.length) revert InvalidInputLength();
+        
+        for (uint256 i = 0; i < tokens.length; i++) {
+            _restrictedTokens[tokens[i]] = restricted[i];
         }
+        
+        emit RestrictedTokensUpdated(tokens, restricted);
     }
 
     /**
-        @dev set restricted tokens
-        @param tokens the tokens to set
-        @param restricted the restricted status
-    */
-    function setRestrictedTokens(address[] calldata tokens, bool[] calldata restricted) public onlyOwner {
-        for(uint256 i = 0; i < tokens.length; i++) {
-            restrictedTokens[tokens[i]] = restricted[i];
-        }
-    }   
-
-    /**
-        @dev set min volume
-        @param minVolume the min volume
-    */
-    function setMinVolume(uint256 minVolume) public onlyOwner {
-        MIN_VOLUME = minVolume;
-    }
-
-    /**
-        @dev set max volume
-        @param maxVolume the max volume
-    */
-    function setMaxVolume(uint256 maxVolume) public onlyOwner {
-        MAX_VOLUME = maxVolume;
-    }
-
-
-    //////////////////////////////
-    // HELPER TESTING FUNCTIONS //
-    //////////////////////////////
-
-    /**
-        @dev set price feed for a token (ONLY FOR TESTING)
-        @param token the token address
-        @param priceFeed the price feed address
-    */
-    function setPriceFeed(address token, address priceFeed) public onlyOwner {
+     * @dev Sets the price feed for a token (for testing purposes)
+     * @param token The token address
+     * @param priceFeed The price feed address
+     */
+    function setPriceFeed(address token, address priceFeed) external onlyOwner {
+        if (token == address(0) || priceFeed == address(0)) revert("Invalid address");
         priceFeeds[token] = priceFeed;
+        emit PriceFeedSet(token, priceFeed);
+    }
+
+    /**
+     * @dev Checks if a user is restricted
+     * @param user The user address
+     * @return bool Whether the user is restricted
+     */
+    function isUserRestricted(address user) external view returns (bool) {
+        return _restrictedUsers[user];
+    }
+
+    /**
+     * @dev Checks if a token is restricted
+     * @param token The token address
+     * @return bool Whether the token is restricted
+     */
+    function isTokenRestricted(address token) external view returns (bool) {
+        return _restrictedTokens[token];
     }
 }
