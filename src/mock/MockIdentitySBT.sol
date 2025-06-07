@@ -6,8 +6,8 @@ import {IIdentitySBT} from "../interfaces/IIdentitySBT.sol";
 contract MockIdentitySBT is IIdentitySBT {
     mapping(address => bool) private _hasToken;
 
-    function mint(address to) external {
-        _hasToken[to] = true;
+    function setKYC(address to, bool status) external {
+        _hasToken[to] = status;
     }
 
     function hasToken(address account) external view override returns (bool) {

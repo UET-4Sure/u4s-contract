@@ -5,6 +5,7 @@ import {IIdentitySBT} from "./interfaces/IIdentitySBT.sol";
 import {Config} from "../script/base/Config.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Oracle} from "./Oracle.sol";
+import {console} from "forge-std/console.sol";
 
 contract KYCContract is Config, Ownable {
     IIdentitySBT public identitySBT;
@@ -29,7 +30,7 @@ contract KYCContract is Config, Ownable {
         if(restrictedUsers[tx.origin] || restrictedTokens[token]) {
             return false;
         }
-        
+
         // if the volume is less than 500 USD, return true
         if(volume <= 500 * 10 ** 18) {
             return true;
@@ -69,4 +70,18 @@ contract KYCContract is Config, Ownable {
             restrictedTokens[tokens[i]] = restricted[i];
         }
     }   
+
+
+    //////////////////////////////
+    // HELPER TESTING FUNCTIONS //
+    //////////////////////////////
+
+    /**
+        @dev set price feed for a token (ONLY FOR TESTING)
+        @param token the token address
+        @param priceFeed the price feed address
+    */
+    function setPriceFeed(address token, address priceFeed) public onlyOwner {
+        priceFeeds[token] = priceFeed;
+    }
 }

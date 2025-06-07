@@ -61,7 +61,7 @@ contract KYCContractTest is Test {
         oracle.setPrice(1);
         
         // Mint KYC token to user1
-        identitySBT.mint(tx.origin);
+        identitySBT.setKYC(tx.origin, true);
         
         // Test with amount over $500 but user has KYC
         vm.prank(tx.origin);

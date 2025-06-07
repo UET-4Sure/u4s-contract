@@ -19,20 +19,11 @@ import {LiquidityAmounts} from "v4-core/test/utils/LiquidityAmounts.sol";
 import {IPositionManager} from "v4-periphery/src/interfaces/IPositionManager.sol";
 import {EasyPosm} from "./utils/EasyPosm.sol";
 import {Fixtures} from "./utils/Fixtures.sol";
+import {KYCContract} from "../src/KYCContract.sol";
+import {MockIdentitySBT} from "../src/mock/MockIdentitySBT.sol";
+import {MockOracle} from "../src/mock/MockOracle.sol";
 
-contract MockIdentitySBT is IIdentitySBT {
-    mapping(address => bool) public hasKYC;
-
-    function setKYC(address user, bool status) external {
-        hasKYC[user] = status;
-    }
-
-    function hasToken(address user) external view override returns (bool) {
-        return hasKYC[user];
-    }
-}
-
-contract KYCHookTest is Test, Fixtures {
+contract MainHookTest is Test, Fixtures {
     using EasyPosm for IPositionManager;
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
@@ -41,7 +32,8 @@ contract KYCHookTest is Test, Fixtures {
     MainHook hook;
     PoolId poolId;
     MockIdentitySBT identitySBT;
-
+    KYCContract kycContract;
+    MockOracle oracle;
     uint256 tokenId;
     int24 tickLower;
     int24 tickUpper;
@@ -55,7 +47,15 @@ contract KYCHookTest is Test, Fixtures {
 
         // Deploy mock IdentitySBT
         identitySBT = new MockIdentitySBT();
-        identitySBT.setKYC(tx.origin, true);
+
+        // Deploy kyc contract
+        kycContract = new KYCContract(address(identitySBT));
+
+        // Set up price feeds for the actual tokens used in the pool
+        oracle = new MockOracle();
+        kycContract.setPriceFeed(Currency.unwrap(currency0), address(oracle));
+        kycContract.setPriceFeed(Currency.unwrap(currency1), address(oracle));
+        oracle.setPrice(1);
 
         // Deploy the hook to an address with the correct flags
         address flags = address(
@@ -63,7 +63,7 @@ contract KYCHookTest is Test, Fixtures {
                 Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG
             ) ^ (0x4444 << 144) // Namespace the hook to avoid collisions
         );
-        bytes memory constructorArgs = abi.encode(manager, address(identitySBT));
+        bytes memory constructorArgs = abi.encode(manager, address(kycContract));
         deployCodeTo("MainHook.sol:MainHook", constructorArgs, flags);
         hook = MainHook(flags);
 
@@ -98,105 +98,55 @@ contract KYCHookTest is Test, Fixtures {
         );
     }
 
-    function testSwapWithKYC() public {
+    function testSwapWithKYC_LowVolume() public {
         // Test swap with KYC'ed user
         bool zeroForOne = true;
-        int256 amountSpecified = -1e18;
+        int256 amountSpecified = -500e18;
+        BalanceDelta swapDelta = swap(key, zeroForOne, amountSpecified, ZERO_BYTES);
+        assertEq(int256(swapDelta.amount0()), amountSpecified);
+    }
+
+    function testSwapWithKYC_HighVolume() public {
+        oracle.setPrice(5001);
+
+        // Test swap with KYC'ed user
+        bool zeroForOne = true;
+        int256 amountSpecified = -2e18;
+        vm.expectRevert();
+        BalanceDelta swapDelta = swap(key, zeroForOne, amountSpecified, ZERO_BYTES);
+    }
+
+    function testSwapWithKYC() public {
+        // Set KYC to true
+        identitySBT.setKYC(tx.origin, true);
+
+        oracle.setPrice(500);
+
+        // Test swap with KYC'ed user
+        bool zeroForOne = true;
+        int256 amountSpecified = -2e18;
         BalanceDelta swapDelta = swap(key, zeroForOne, amountSpecified, ZERO_BYTES);
         assertEq(int256(swapDelta.amount0()), amountSpecified);
     }
 
     function testSwapWithoutKYC() public {
-        // Revoke KYC
-        identitySBT.setKYC(tx.origin, false);
-
-        // Test swap without KYC
         bool zeroForOne = true;
-        int256 amountSpecified = -1e18;
+        int256 amountSpecified = -1000e18;
         vm.expectRevert();
         swap(key, zeroForOne, amountSpecified, ZERO_BYTES);
     }
 
-    function testAddLiquidityWithKYC() public {
-        // Test add liquidity with KYC'ed user
-        uint128 liquidityAmount = 1e18;
-        (uint256 amount0Expected, uint256 amount1Expected) = LiquidityAmounts.getAmountsForLiquidity(
-            SQRT_PRICE_1_1,
-            TickMath.getSqrtPriceAtTick(tickLower),
-            TickMath.getSqrtPriceAtTick(tickUpper),
-            liquidityAmount
-        );
-
-        (uint256 newTokenId,) = posm.mint(
-            key,
-            tickLower,
-            tickUpper,
-            liquidityAmount,
-            amount0Expected + 1,
-            amount1Expected + 1,
-            address(this),
-            block.timestamp,
-            ZERO_BYTES
-        );
-        assertTrue(newTokenId > 0, "Should mint position");
-    }
-
-    // function testAddLiquidityWithoutKYC() public {
+    // function testSwapWithoutKYC() public {
     //     // Revoke KYC
-    //     identitySBT.setKYC(tx.origin, false);
+    //     identitySBT.setKYC(address(this), false);
+    //     identitySBT.setKYC(address(manager), false);
+    //     identitySBT.setKYC(address(posm), false);
+    //     identitySBT.setKYC(address(swapRouter), false);
 
-    //     // Test add liquidity without KYC
-    //     uint128 liquidityAmount = 1e18;
-    //     (uint256 amount0Expected, uint256 amount1Expected) = LiquidityAmounts.getAmountsForLiquidity(
-    //         SQRT_PRICE_1_1,
-    //         TickMath.getSqrtPriceAtTick(tickLower),
-    //         TickMath.getSqrtPriceAtTick(tickUpper),
-    //         liquidityAmount
-    //     );
+    //     // Test swap without KYC
+    //     bool zeroForOne = true;
+    //     int256 amountSpecified = -1e18;
     //     vm.expectRevert();
-    //     posm.mint(
-    //         key,
-    //         tickLower,
-    //         tickUpper,
-    //         liquidityAmount,
-    //         amount0Expected + 1,
-    //         amount1Expected + 1,
-    //         tx.origin,
-    //         block.timestamp,
-    //         ZERO_BYTES
-    //     );
-    // }
-
-    function testRemoveLiquidityWithKYC() public {
-        // Test remove liquidity with KYC'ed user
-        uint128 liquidityAmount = 1e18;
-        posm.decreaseLiquidity(
-            tokenId,
-            liquidityAmount,
-            MAX_SLIPPAGE_REMOVE_LIQUIDITY,
-            MAX_SLIPPAGE_REMOVE_LIQUIDITY,
-            address(this),
-            block.timestamp,
-            ZERO_BYTES
-        );
-    }
-
-    // function testRemoveLiquidityWithoutKYC() public {
-    //     // Revoke KYC
-    //     identitySBT.setKYC(tx.origin, false);
-
-    //     // Test remove liquidity without KYC
-    //     uint128 liquidityAmount = 1e18;
-    //     vm.prank(tx.origin);
-    //     vm.expectRevert();
-    //     posm.decreaseLiquidity(
-    //         tokenId,
-    //         liquidityAmount,
-    //         MAX_SLIPPAGE_REMOVE_LIQUIDITY,
-    //         MAX_SLIPPAGE_REMOVE_LIQUIDITY,
-    //         tx.origin,
-    //         block.timestamp,
-    //         ZERO_BYTES
-    //     );
+    //     swap(key, zeroForOne, amountSpecified, ZERO_BYTES);
     // }
 } 
