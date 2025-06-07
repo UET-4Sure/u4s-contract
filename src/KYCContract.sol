@@ -62,7 +62,7 @@ contract KYCContract is Config, Ownable {
         address priceFeed = priceFeeds[token];
         if (priceFeed == address(0)) revert PriceFeedNotSet();
         uint256 price = uint256(Oracle(priceFeed).getChainlinkDataFeedLatestAnswer());
-        uint256 volume = amount * price;        
+        uint256 volume = amount * price;     
 
         // Allow transactions below minimum volume
         if (volume <= minVolumeSwap) {

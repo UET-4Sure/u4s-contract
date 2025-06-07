@@ -76,4 +76,74 @@ contract KYCContractTest is Test {
         vm.prank(tx.origin);
         assertFalse(kycContract.isPermitKYCSwap(1000 * 10**18, address(usdc)));
     }
+
+    function test_IsPermitKYCModifyLiquidity_UnderLimit() public {
+        // Set oracle price to $1
+        oracle.setPrice(1);
+        
+        // Test with amounts under $500
+        assertTrue(kycContract.isPermitKYCModifyLiquidity(
+            100 * 10**18,  // amount0
+            address(usdc),
+            100 * 10**18,  // amount1
+            address(weth)
+        ));
+    }
+
+    function test_IsPermitKYCModifyLiquidity_OverLimit() public {
+        // Set oracle price to $1
+        oracle.setPrice(1);
+        
+        // Test with amounts over $10000
+        assertFalse(kycContract.isPermitKYCModifyLiquidity(
+            10000 * 10**18,  // amount0
+            address(usdc),
+            10000 * 10**18,  // amount1
+            address(weth)
+        ));
+    }
+
+    function test_IsPermitKYCModifyLiquidity_WithKYC() public {
+        // Set oracle price to $1
+        oracle.setPrice(1);
+        
+        // Mint KYC token to user1
+        identitySBT.setKYC(tx.origin, true);
+        
+        // Test with amounts over $500 but user has KYC
+        vm.prank(tx.origin);
+        assertTrue(kycContract.isPermitKYCModifyLiquidity(
+            1000 * 10**18,  // amount0
+            address(usdc),
+            1000 * 10**18,  // amount1
+            address(weth)
+        ));
+    }
+
+    function test_IsPermitKYCModifyLiquidity_WithoutKYC() public {
+        // Set oracle price to $1
+        oracle.setPrice(1);
+        
+        // Test with amounts over $500 but user has not KYC
+        vm.prank(tx.origin);
+        assertFalse(kycContract.isPermitKYCModifyLiquidity(
+            1000 * 10**18,  // amount0
+            address(usdc),
+            1000 * 10**18,  // amount1
+            address(weth)
+        ));
+    }
+
+    function test_IsPermitKYCModifyLiquidity_MixedAmounts() public {
+        // Set oracle price to $1
+        oracle.setPrice(1);
+        
+        // Test with mixed amounts (one under limit, one over)
+        assertFalse(kycContract.isPermitKYCModifyLiquidity(
+            100 * 10**18,    // amount0 under limit
+            address(usdc),
+            1000 * 10**18,   // amount1 over limit
+            address(weth)
+        ));
+    }
 } 

@@ -47,6 +47,7 @@ contract MainHookTest is Test, Fixtures {
 
         // Deploy mock IdentitySBT
         identitySBT = new MockIdentitySBT();
+        identitySBT.setKYC(tx.origin, true);
 
         // Deploy kyc contract
         kycContract = new KYCContract(address(identitySBT));
@@ -76,7 +77,7 @@ contract MainHookTest is Test, Fixtures {
         tickLower = TickMath.minUsableTick(key.tickSpacing);
         tickUpper = TickMath.maxUsableTick(key.tickSpacing);
 
-        uint128 liquidityAmount = 100e18;
+        uint128 liquidityAmount = 1000;
 
         (uint256 amount0Expected, uint256 amount1Expected) = LiquidityAmounts.getAmountsForLiquidity(
             SQRT_PRICE_1_1,
@@ -84,6 +85,7 @@ contract MainHookTest is Test, Fixtures {
             TickMath.getSqrtPriceAtTick(tickUpper),
             liquidityAmount
         );
+
 
         (tokenId,) = posm.mint(
             key,
@@ -117,8 +119,6 @@ contract MainHookTest is Test, Fixtures {
     }
 
     function testSwapWithKYC() public {
-        // Set KYC to true
-        identitySBT.setKYC(tx.origin, true);
 
         oracle.setPrice(500);
 
@@ -130,23 +130,13 @@ contract MainHookTest is Test, Fixtures {
     }
 
     function testSwapWithoutKYC() public {
+        // Revoke KYC
+        identitySBT.setKYC(tx.origin, false);
+
         bool zeroForOne = true;
         int256 amountSpecified = -1000e18;
         vm.expectRevert();
         swap(key, zeroForOne, amountSpecified, ZERO_BYTES);
     }
 
-    // function testSwapWithoutKYC() public {
-    //     // Revoke KYC
-    //     identitySBT.setKYC(address(this), false);
-    //     identitySBT.setKYC(address(manager), false);
-    //     identitySBT.setKYC(address(posm), false);
-    //     identitySBT.setKYC(address(swapRouter), false);
-
-    //     // Test swap without KYC
-    //     bool zeroForOne = true;
-    //     int256 amountSpecified = -1e18;
-    //     vm.expectRevert();
-    //     swap(key, zeroForOne, amountSpecified, ZERO_BYTES);
-    // }
 } 
