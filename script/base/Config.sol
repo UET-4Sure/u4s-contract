@@ -33,8 +33,14 @@ contract Config {
     // IDENTITY SBT ADDRESS
     address constant IDENTITY_SBT = address(0xb117d1c006fC208FEAFFE5E08529BE5de8235B73);
 
-    // KYC Hook contract address
-    IHooks constant hookContract = IHooks(address(0x43C5d270ea5C0D4c509747578486F977CFC50a80));
+    // KYC Contract
+    address constant KYC_CONTRACT = address(0xa496e8d38896EA779BAf5c4B6B5E5389513A67a3);
+
+    // MAIN HOOK ADDRESS
+    address constant MAIN_HOOK = address(0xF1B65Ab2a975D3796bEb9d3Ea8786dEE235F0a80);
+
+    // IHooks
+    IHooks constant hookContract = IHooks(MAIN_HOOK);
 
     // TOKEN & CURRENCY for pool
     IERC20 constant token0 = IERC20(USDC);

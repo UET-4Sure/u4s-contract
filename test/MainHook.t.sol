@@ -14,6 +14,7 @@ import {PoolSwapTest} from "v4-core/src/test/PoolSwapTest.sol";
 import {MainHook} from "../src/MainHook.sol";
 import {StateLibrary} from "v4-core/src/libraries/StateLibrary.sol";
 import {IIdentitySBT} from "../src/interfaces/IIdentitySBT.sol";
+import {MockV3Aggregator} from "chainlink/contracts/src/v0.8/shared/mocks/MockV3Aggregator.sol";
 
 import {LiquidityAmounts} from "v4-core/test/utils/LiquidityAmounts.sol";
 import {IPositionManager} from "v4-periphery/src/interfaces/IPositionManager.sol";
@@ -21,7 +22,6 @@ import {EasyPosm} from "./utils/EasyPosm.sol";
 import {Fixtures} from "./utils/Fixtures.sol";
 import {KYCContract} from "../src/KYCContract.sol";
 import {MockIdentitySBT} from "../src/mock/MockIdentitySBT.sol";
-import {MockOracle} from "../src/mock/MockOracle.sol";
 
 contract MainHookTest is Test, Fixtures {
     using EasyPosm for IPositionManager;
@@ -33,7 +33,7 @@ contract MainHookTest is Test, Fixtures {
     PoolId poolId;
     MockIdentitySBT identitySBT;
     KYCContract kycContract;
-    MockOracle oracle;
+    MockV3Aggregator priceFeed;
     uint256 tokenId;
     int24 tickLower;
     int24 tickUpper;
@@ -53,10 +53,9 @@ contract MainHookTest is Test, Fixtures {
         kycContract = new KYCContract(address(identitySBT));
 
         // Set up price feeds for the actual tokens used in the pool
-        oracle = new MockOracle();
-        kycContract.setPriceFeed(Currency.unwrap(currency0), address(oracle));
-        kycContract.setPriceFeed(Currency.unwrap(currency1), address(oracle));
-        oracle.setPrice(1);
+        priceFeed = new MockV3Aggregator(8, 1 * 10**8); // 8 decimals, initial price 1 USD
+        kycContract.setPriceFeed(Currency.unwrap(currency0), address(priceFeed));
+        kycContract.setPriceFeed(Currency.unwrap(currency1), address(priceFeed));
 
         // Deploy the hook to an address with the correct flags
         address flags = address(
@@ -86,7 +85,6 @@ contract MainHookTest is Test, Fixtures {
             liquidityAmount
         );
 
-
         (tokenId,) = posm.mint(
             key,
             tickLower,
@@ -109,7 +107,7 @@ contract MainHookTest is Test, Fixtures {
     }
 
     function testSwapWithKYC_HighVolume() public {
-        oracle.setPrice(5001);
+        priceFeed.updateAnswer(5001 * 10**8);
 
         // Test swap with KYC'ed user
         bool zeroForOne = true;
@@ -119,8 +117,7 @@ contract MainHookTest is Test, Fixtures {
     }
 
     function testSwapWithKYC() public {
-
-        oracle.setPrice(500);
+        priceFeed.updateAnswer(500 * 10**8);
 
         // Test swap with KYC'ed user
         bool zeroForOne = true;
@@ -138,5 +135,4 @@ contract MainHookTest is Test, Fixtures {
         vm.expectRevert();
         swap(key, zeroForOne, amountSpecified, ZERO_BYTES);
     }
-
 } 

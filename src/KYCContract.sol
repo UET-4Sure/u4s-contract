@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {IIdentitySBT} from "./interfaces/IIdentitySBT.sol";
 import {Config} from "../script/base/Config.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {Oracle} from "./Oracle.sol";
+import {AggregatorV3Interface} from "chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {console} from "forge-std/console.sol";
 
 /**
@@ -35,16 +35,29 @@ contract KYCContract is Config, Ownable {
     error Unauthorized();
     error InvalidVolumeLimits();
 
+    uint256 constant CHAINLINK_DECIMALS = 8;    
+
     constructor(
         address _identitySBT
     ) Ownable(msg.sender) {
         if (_identitySBT == address(0)) revert("Invalid identity SBT address");
         
         identitySBT = IIdentitySBT(_identitySBT);
-        minVolumeSwap = 500 * 10**18;
-        maxVolumeSwap = 10000 * 10**18;
-        minVolumeModifyLiquidity = 500 * 10**18;
-        maxVolumeModifyLiquidity = 1000000 * 10**18;
+        minVolumeSwap = 500 * 10**18 * 10**CHAINLINK_DECIMALS;
+        maxVolumeSwap = 10000 * 10**18 * 10**CHAINLINK_DECIMALS;
+        minVolumeModifyLiquidity = 500 * 10**18 * 10**CHAINLINK_DECIMALS;
+        maxVolumeModifyLiquidity = 1000000 * 10**18 * 10**CHAINLINK_DECIMALS;
+    }
+
+    /**
+     * @dev Internal function to query price from Chainlink price feed
+     * @param priceFeed The address of the Chainlink price feed
+     * @return price The latest price from the price feed
+     */
+    function _queryPrice(address priceFeed) internal view returns (uint256) {
+        if (priceFeed == address(0)) revert PriceFeedNotSet();
+        (,int256 answer,,,) = AggregatorV3Interface(priceFeed).latestRoundData();
+        return uint256(answer);
     }
 
     /**
@@ -59,9 +72,7 @@ contract KYCContract is Config, Ownable {
             return false;
         }
 
-        address priceFeed = priceFeeds[token];
-        if (priceFeed == address(0)) revert PriceFeedNotSet();
-        uint256 price = uint256(Oracle(priceFeed).getChainlinkDataFeedLatestAnswer());
+        uint256 price = _queryPrice(priceFeeds[token]);
         uint256 volume = amount * price;     
 
         // Allow transactions below minimum volume
@@ -100,8 +111,10 @@ contract KYCContract is Config, Ownable {
         address priceFeed0 = priceFeeds[token0];
         address priceFeed1 = priceFeeds[token1];
         if (priceFeed0 == address(0) || priceFeed1 == address(0)) revert PriceFeedNotSet();
-        uint256 price0 = uint256(Oracle(priceFeed0).getChainlinkDataFeedLatestAnswer());
-        uint256 price1 = uint256(Oracle(priceFeed1).getChainlinkDataFeedLatestAnswer());
+        
+        uint256 price0 = _queryPrice(priceFeed0);
+        uint256 price1 = _queryPrice(priceFeed1);
+        
         uint256 totalVolume = amount0 * price0 + amount1 * price1;
 
         if(totalVolume <= minVolumeModifyLiquidity) {
