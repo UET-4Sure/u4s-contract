@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {IIdentitySBT} from "./interfaces/IIdentitySBT.sol";
 import {Config} from "../script/base/Config.sol";
+import {Constants} from "../script/base/Constants.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Oracle} from "./Oracle.sol";
 import {console} from "forge-std/console.sol";
@@ -11,7 +12,7 @@ import {console} from "forge-std/console.sol";
  * @title KYCContract
  * @dev Manages KYC verification and volume restrictions for token transactions
  */
-contract KYCContract is Config, Ownable {
+contract KYCContract is Config, Constants, Ownable {
     // State variables
     IIdentitySBT public immutable identitySBT;
     mapping(address => bool) private _restrictedUsers;
@@ -41,10 +42,10 @@ contract KYCContract is Config, Ownable {
         if (_identitySBT == address(0)) revert("Invalid identity SBT address");
         
         identitySBT = IIdentitySBT(_identitySBT);
-        minVolumeSwap = 500 * 10**18;
-        maxVolumeSwap = 10000 * 10**18;
-        minVolumeModifyLiquidity = 500 * 10**18;
-        maxVolumeModifyLiquidity = 1000000 * 10**18;
+        minVolumeSwap = 500 * 10**18 * 10**CHAINLINK_DECIMALS;
+        maxVolumeSwap = 10000 * 10**18 * 10**CHAINLINK_DECIMALS;
+        minVolumeModifyLiquidity = 500 * 10**18 * 10**CHAINLINK_DECIMALS;
+        maxVolumeModifyLiquidity = 1000000 * 10**18 * 10**CHAINLINK_DECIMALS;
     }
 
     /**
