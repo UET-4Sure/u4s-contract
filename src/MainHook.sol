@@ -7,13 +7,15 @@ import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
-import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/src/types/BeforeSwapDelta.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "v4-core/src/types/BeforeSwapDelta.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IKYCContract} from "./interfaces/IKYCContract.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 import {LiquidityAmounts} from "lib/uniswap-hooks/lib/v4-periphery/lib/v4-core/test/utils/LiquidityAmounts.sol";
 import {StateLibrary} from "lib/uniswap-hooks/lib/v4-core/src/libraries/StateLibrary.sol";
+import {ITaxContract} from "./interfaces/ITaxContract.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract MainHook is BaseHook, Ownable {
     using PoolIdLibrary for PoolKey;
@@ -26,12 +28,17 @@ contract MainHook is BaseHook, Ownable {
 
     // State variables
     IKYCContract public immutable kycContract;
+    ITaxContract public immutable taxContract;
+
+    mapping(address => uint256) public taxFees; // token => tax fee
 
     constructor(
         IPoolManager _poolManager,
-        address _kycContract
+        address _kycContract,
+        address _taxContract
     ) BaseHook(_poolManager) Ownable(msg.sender) {
         kycContract = IKYCContract(_kycContract);
+        taxContract = ITaxContract(_taxContract);
     }
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
@@ -43,7 +50,7 @@ contract MainHook is BaseHook, Ownable {
             beforeRemoveLiquidity: true,
             afterRemoveLiquidity: false,
             beforeSwap: true,
-            afterSwap: false,
+            afterSwap: true,
             beforeDonate: false,
             afterDonate: false,
             beforeSwapReturnDelta: false,
@@ -58,16 +65,39 @@ contract MainHook is BaseHook, Ownable {
         PoolKey calldata key,
         IPoolManager.SwapParams calldata params,
         bytes calldata
-    ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
+    ) internal override returns (bytes4, BeforeSwapDelta delta, uint24) {
         uint256 amount = params.amountSpecified > 0 ? uint256(params.amountSpecified) : uint256(-params.amountSpecified);
-        address token = _getSwapToken(key, params);
+        address token = _getSwapExactToken(key, params);
 
         if (!kycContract.isPermitKYCSwap(amount, token)) {
             revert NotPermitKYCSwap();
         }
 
-        return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        delta = _applyTax(key, params, amount);
+        
+        // Return 0 for lpFeeOverride as we're not changing the LP fee
+        return (BaseHook.beforeSwap.selector, delta, 0);
     }
+
+    function _afterSwap(
+        address,
+        PoolKey calldata key,
+        IPoolManager.SwapParams calldata params,
+        BalanceDelta,
+        bytes calldata
+    ) internal override returns (bytes4, int128) {
+        address token = _getSwapTokenIn(key, params);
+        uint256 fee = taxFees[token];
+
+        // Transfer the tax fee to the tax contract
+        if (fee > 0) {
+            // @TODO: check if native ETH or ERC20 token
+            IERC20(token).transfer(address(taxContract), fee);
+            taxFees[token] = 0;
+        }
+        return (BaseHook.afterSwap.selector, 0);
+    }
+
 
     function _beforeAddLiquidity(
         address,
@@ -110,7 +140,38 @@ contract MainHook is BaseHook, Ownable {
     }
 
     // Internal helper functions
-    function _getSwapToken(PoolKey calldata key, IPoolManager.SwapParams calldata params) internal pure returns (address) {
+    function _applyTax(
+        PoolKey calldata key,
+        IPoolManager.SwapParams calldata params,
+        uint256 amount
+    ) internal returns (BeforeSwapDelta delta) {
+        // Calculate a tax fee
+        uint256 fee = taxContract.calculateTax(amount);
+        int128 feeInt = int128(int256(fee));
+        int128 amountInt = int128(int256(amount));
+
+        // Adjust the specified amount based on swap direction
+        int128 adjustedSpecifiedAmount;
+        if (params.amountSpecified < 0) {
+            // For exact input, reduce the amount by the fee
+            adjustedSpecifiedAmount = amountInt - feeInt;
+        } else {
+            // For exact output, increase the amount by the fee
+            adjustedSpecifiedAmount = amountInt + feeInt;
+        }
+        
+        // Create the BeforeSwapDelta using toBeforeSwapDelta function
+        delta = params.zeroForOne 
+            ? toBeforeSwapDelta(-adjustedSpecifiedAmount, 0)
+            : toBeforeSwapDelta(0, -adjustedSpecifiedAmount);
+
+        address tokenIn = _getSwapTokenIn(key, params);
+        taxFees[tokenIn] = fee;
+
+        return delta;
+    }
+
+    function _getSwapExactToken(PoolKey calldata key, IPoolManager.SwapParams calldata params) internal pure returns (address) {
         if (params.zeroForOne) {
             return params.amountSpecified > 0 
                 ? Currency.unwrap(key.currency1)
@@ -120,6 +181,10 @@ contract MainHook is BaseHook, Ownable {
                 ? Currency.unwrap(key.currency0)
                 : Currency.unwrap(key.currency1);
         }
+    }
+
+    function _getSwapTokenIn(PoolKey calldata key, IPoolManager.SwapParams calldata params) internal pure returns (address) {
+        return params.zeroForOne ? Currency.unwrap(key.currency0) : Currency.unwrap(key.currency1);
     }
 
     function _calculateLiquidityAmounts(
@@ -143,4 +208,5 @@ contract MainHook is BaseHook, Ownable {
             uint128(uint256(params.liquidityDelta))
         );
     }
+
 }

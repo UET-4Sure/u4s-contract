@@ -142,22 +142,12 @@ contract TaxContract is Ownable {
         return _calculateTax(amount);
     }
 
-    /**
-     * @dev Calculates the amount after tax deduction
-     * @param amount The original amount
-     * @return The amount after tax
-     */
     function getAmountAfterTax(uint256 amount) external view returns (uint256) {
         return _applyTax(amount);
     }
 
     // ============ Internal Functions ============
 
-    /**
-     * @dev Internal function to check whitelist status
-     * @param account The address to check
-     * @return Whether the address is whitelisted
-     */
     function _checkWhitelisted(address account) internal view returns (bool) {
         return _whitelistedAddresses[account];
     }

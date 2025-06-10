@@ -21,13 +21,13 @@ contract MainHookScript is Script, Config, Constants {
         );
 
         // Mine a salt that will produce a hook address with the correct flags
-        bytes memory constructorArgs = abi.encode(POOLMANAGER, KYC_CONTRACT);
+        bytes memory constructorArgs = abi.encode(POOLMANAGER, KYC_CONTRACT, TAX_CONTRACT);
         (address hookAddress, bytes32 salt) =
             HookMiner.find(CREATE2_DEPLOYER, flags, type(MainHook).creationCode, constructorArgs);
 
         // Deploy the hook using CREATE2
         vm.broadcast();
-        MainHook mainHook = new MainHook{salt: salt}(IPoolManager(POOLMANAGER), KYC_CONTRACT);
+        MainHook mainHook = new MainHook{salt: salt}(IPoolManager(POOLMANAGER), KYC_CONTRACT, TAX_CONTRACT);
         require(address(mainHook) == hookAddress, "MainHookScript: hook address mismatch");
     }
 }

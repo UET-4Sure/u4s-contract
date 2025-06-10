@@ -36,6 +36,9 @@ contract Config {
     // KYC Contract
     address constant KYC_CONTRACT = address(0xa496e8d38896EA779BAf5c4B6B5E5389513A67a3);
 
+    // TAX CONTRACT
+    address constant TAX_CONTRACT = address(0x0000000000000000000000000000000000000000);
+
     // MAIN HOOK ADDRESS
     address constant MAIN_HOOK = address(0xF1B65Ab2a975D3796bEb9d3Ea8786dEE235F0a80);
 
