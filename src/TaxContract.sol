@@ -28,8 +28,6 @@ contract TaxContract is Ownable {
         taxRate = _taxRate;
     }
 
-
-
     modifier onlyWhitelisted() {
         if (!_checkWhitelisted(msg.sender)) revert NotWhitelisted();
         _;
@@ -181,4 +179,11 @@ contract TaxContract is Ownable {
     function _applyTax(uint256 amount) internal view returns (uint256) {
         return amount - _calculateTax(amount);
     }
+
+    // ============ Receive Function ============
+
+    /**
+     * @dev Allows the contract to receive ETH
+     */
+    receive() external payable {}
 }
