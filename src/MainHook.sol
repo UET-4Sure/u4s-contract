@@ -86,15 +86,8 @@ contract MainHook is BaseHook, Ownable {
         BalanceDelta,
         bytes calldata
     ) internal override returns (bytes4, int128) {
-        address token = _getSwapTokenIn(key, params);
-        uint256 fee = taxFees[token];
-
-        // Transfer the tax fee to the tax contract
-        if (fee > 0) {
-            // @TODO: check if native ETH or ERC20 token
-            IERC20(token).transfer(address(taxContract), fee);
-            taxFees[token] = 0;
-        }
+        _transferTaxFee(key, params);
+        
         return (BaseHook.afterSwap.selector, 0);
     }
 
@@ -137,6 +130,15 @@ contract MainHook is BaseHook, Ownable {
         }
 
         return BaseHook.beforeRemoveLiquidity.selector;
+    }
+
+    function _transferTaxFee(PoolKey calldata key, IPoolManager.SwapParams calldata params) internal {
+        address token = _getSwapTokenIn(key, params);
+        uint256 fee = taxFees[token];
+        if (fee > 0) {
+            IERC20(token).transfer(address(taxContract), fee);
+            taxFees[token] = 0;
+        }
     }
 
     // Internal helper functions
