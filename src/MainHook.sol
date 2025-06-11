@@ -13,7 +13,7 @@ import {IKYCContract} from "./interfaces/IKYCContract.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 import {LiquidityAmounts} from "lib/uniswap-hooks/lib/v4-periphery/lib/v4-core/test/utils/LiquidityAmounts.sol";
-import {StateLibrary} from "lib/uniswap-hooks/lib/v4-core/src/libraries/StateLibrary.sol";
+import {StateLibrary} from "v4-core/src/libraries/StateLibrary.sol";
 
 contract MainHook is BaseHook, Ownable {
     using PoolIdLibrary for PoolKey;
@@ -43,7 +43,7 @@ contract MainHook is BaseHook, Ownable {
             beforeRemoveLiquidity: true,
             afterRemoveLiquidity: false,
             beforeSwap: true,
-            afterSwap: false,
+            afterSwap: true,
             beforeDonate: false,
             afterDonate: false,
             beforeSwapReturnDelta: false,
@@ -126,10 +126,7 @@ contract MainHook is BaseHook, Ownable {
         PoolKey calldata key,
         IPoolManager.ModifyLiquidityParams calldata params
     ) internal view returns (uint256 amount0, uint256 amount1) {
-        // Get current sqrt price
-        bytes32 stateSlot = keccak256(abi.encode(key.toId(), uint256(0)));
-        bytes32 data = poolManager.extsload(stateSlot);
-        uint160 sqrtPriceX96 = uint160(uint256(data));
+        (uint160 sqrtPriceX96,,, ) = poolManager.getSlot0(key.toId());
 
         // Get sqrt prices for the range
         uint160 sqrtPriceAX96 = TickMath.getSqrtPriceAtTick(params.tickLower);
