@@ -5,27 +5,28 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract TaxContract is Ownable {
+    uint256 public constant TAX_DENOMINATOR = 1e18;
     
-    uint256 public taxRate;
+    uint256 public taxPercentage;
     mapping(address => bool) private _whitelistedAddresses;
 
     
     event TaxWithdrawn(address indexed token, uint256 amount);
     event ETHWithdrawn(uint256 amount);
     event WhitelistUpdated(address indexed account, bool isWhitelisted);
-    event TaxRateUpdated(uint256 oldRate, uint256 newRate);
+    event TaxPercentageUpdated(uint256 oldPercentage, uint256 newPercentage);
 
     
     error NotWhitelisted();
     error ZeroAmount();
     error InsufficientBalance();
-    error InvalidTaxRate();
+    error InvalidTaxPercentage();
     error ZeroAddress();
 
 
-    constructor(uint256 _taxRate) Ownable(msg.sender) {
-        if (_taxRate > 1e18) revert InvalidTaxRate();
-        taxRate = _taxRate;
+    constructor(uint256 _taxPercentage) Ownable(msg.sender) {
+        if (_taxPercentage > TAX_DENOMINATOR) revert InvalidTaxPercentage();
+        taxPercentage = _taxPercentage;
     }
 
     modifier onlyWhitelisted() {
@@ -77,16 +78,16 @@ contract TaxContract is Ownable {
     }
 
     /**
-     * @dev Sets a new tax rate
-     * @param _taxRate The new tax rate (must be <= 1e18)
+     * @dev Sets a new tax percentage
+     * @param _taxPercentage The new tax percentage (must be <= TAX_DENOMINATOR)
      */
-    function setTaxRate(uint256 _taxRate) external onlyOwner {
-        if (_taxRate > 1e18) revert InvalidTaxRate();
+    function setTaxPercentage(uint256 _taxPercentage) external onlyOwner {
+        if (_taxPercentage > TAX_DENOMINATOR) revert InvalidTaxPercentage();
         
-        uint256 oldRate = taxRate;
-        taxRate = _taxRate;
+        uint256 oldPercentage = taxPercentage;
+        taxPercentage = _taxPercentage;
         
-        emit TaxRateUpdated(oldRate, _taxRate);
+        emit TaxPercentageUpdated(oldPercentage, _taxPercentage);
     }
 
     /**
@@ -158,7 +159,7 @@ contract TaxContract is Ownable {
      * @return The tax amount
      */
     function _calculateTax(uint256 amount) internal view returns (uint256) {
-        return (amount * taxRate) / 1e18;
+        return (amount * taxPercentage) / TAX_DENOMINATOR;
     }
 
     /**
