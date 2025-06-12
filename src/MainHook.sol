@@ -16,7 +16,6 @@ import {LiquidityAmounts} from "lib/uniswap-hooks/lib/v4-periphery/lib/v4-core/t
 import {StateLibrary} from "lib/uniswap-hooks/lib/v4-core/src/libraries/StateLibrary.sol";
 import {ITaxContract} from "./interfaces/ITaxContract.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {console} from "forge-std/console.sol";
 
 contract MainHook is BaseHook, Ownable {
     using PoolIdLibrary for PoolKey;
@@ -81,17 +80,12 @@ contract MainHook is BaseHook, Ownable {
     }
 
     function _afterSwap(
-        address sender,
+        address,
         PoolKey calldata key,
         IPoolManager.SwapParams calldata params,
         BalanceDelta,
         bytes calldata
     ) internal override returns (bytes4, int128) {
-        console.log("after swap");
-        address token = _getSwapTokenIn(key, params);
-        console.log("before transfer", IERC20(token).balanceOf(sender));
-
-        console.log("amount", params.amountSpecified); // @TODO: have not deduct fee yet
         _transferTaxFee(key, params);
         
         return (BaseHook.afterSwap.selector, 0);
@@ -142,10 +136,7 @@ contract MainHook is BaseHook, Ownable {
         address token = _getSwapTokenIn(key, params);
         uint256 fee = taxFees[token];
         if (fee > 0) {
-            console.log("transfer tax fee", fee);
-            console.log("before transfer", IERC20(token).balanceOf(address(this)));
-            console.log("before transfer", IERC20(token).balanceOf(address(taxContract)));
-            IERC20(token).transfer(address(taxContract), fee);
+            poolManager.take(Currency.wrap(token), address(taxContract), fee);
             taxFees[token] = 0;
         }
     }
@@ -159,22 +150,9 @@ contract MainHook is BaseHook, Ownable {
         // Calculate a tax fee
         uint256 fee = taxContract.calculateTax(amount);
         int128 feeInt = int128(int256(fee));
-        int128 amountInt = int128(int256(amount));
 
-        // Adjust the specified amount based on swap direction
-        int128 adjustedSpecifiedAmount;
-        if (params.amountSpecified < 0) {
-            // For exact input, reduce the amount by the fee
-            adjustedSpecifiedAmount = amountInt - feeInt;
-        } else {
-            // For exact output, increase the amount by the fee
-            adjustedSpecifiedAmount = amountInt + feeInt;
-        }
-        
         // Create the BeforeSwapDelta using toBeforeSwapDelta function
-        delta = params.zeroForOne 
-            ? toBeforeSwapDelta(-adjustedSpecifiedAmount, 0)
-            : toBeforeSwapDelta(0, -adjustedSpecifiedAmount);
+        delta = toBeforeSwapDelta(feeInt, 0);
 
         address tokenIn = _getSwapTokenIn(key, params);
         taxFees[tokenIn] = fee;
