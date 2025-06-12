@@ -13,4 +13,4 @@ contract MockIdentitySBT is IIdentitySBT {
     function hasToken(address account) external view override returns (bool) {
         return _hasToken[account];
     }
-} 
+}

@@ -53,15 +53,14 @@ contract MainHookTest is Test, Fixtures {
         kycContract = new KYCContract(address(identitySBT));
 
         // Set up price feeds for the actual tokens used in the pool
-        priceFeed = new MockV3Aggregator(8, 1 * 10**8); // 8 decimals, initial price 1 USD
+        priceFeed = new MockV3Aggregator(8, 1 * 10 ** 8); // 8 decimals, initial price 1 USD
         kycContract.setPriceFeed(Currency.unwrap(currency0), address(priceFeed));
         kycContract.setPriceFeed(Currency.unwrap(currency1), address(priceFeed));
 
         // Deploy the hook to an address with the correct flags
         address flags = address(
-            uint160(
-                Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG
-            ) ^ (0x4444 << 144) // Namespace the hook to avoid collisions
+            uint160(Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG)
+                ^ (0x4444 << 144) // Namespace the hook to avoid collisions
         );
         bytes memory constructorArgs = abi.encode(manager, address(kycContract));
         deployCodeTo("MainHook.sol:MainHook", constructorArgs, flags);
@@ -107,7 +106,7 @@ contract MainHookTest is Test, Fixtures {
     }
 
     function testSwapWithKYC_HighVolume() public {
-        priceFeed.updateAnswer(5001 * 10**8);
+        priceFeed.updateAnswer(5001 * 10 ** 8);
 
         // Test swap with KYC'ed user
         bool zeroForOne = true;
@@ -117,7 +116,7 @@ contract MainHookTest is Test, Fixtures {
     }
 
     function testSwapWithKYC() public {
-        priceFeed.updateAnswer(500 * 10**8);
+        priceFeed.updateAnswer(500 * 10 ** 8);
 
         // Test swap with KYC'ed user
         bool zeroForOne = true;
@@ -135,4 +134,4 @@ contract MainHookTest is Test, Fixtures {
         vm.expectRevert();
         swap(key, zeroForOne, amountSpecified, ZERO_BYTES);
     }
-} 
+}
