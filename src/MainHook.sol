@@ -69,10 +69,12 @@ contract MainHook is BaseHook, Ownable {
         uint256 amount = params.amountSpecified > 0 ? uint256(params.amountSpecified) : uint256(-params.amountSpecified);
         address token = _getSwapExactToken(key, params);
 
+        // check kyc
         if (!kycContract.isPermitKYCSwap(amount, token)) {
             revert NotPermitKYCSwap();
         }
 
+        // apply tax
         delta = _applyTax(key, params, amount);
         
         // Return 0 for lpFeeOverride as we're not changing the LP fee
@@ -86,6 +88,7 @@ contract MainHook is BaseHook, Ownable {
         BalanceDelta,
         bytes calldata
     ) internal override returns (bytes4, int128) {
+        // transfer tax fee to tax contract
         _transferTaxFee(key, params);
         
         return (BaseHook.afterSwap.selector, 0);
