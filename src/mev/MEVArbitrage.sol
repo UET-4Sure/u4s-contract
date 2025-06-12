@@ -139,6 +139,79 @@ contract MEVArbitrage is BaseHook, ERC20, NonReentrant, IMEVArbitrage, IUnlockCa
         initialized = true;
     }
 
+    function mint(uint256 _mintAmount, address _receiver)
+        external
+        payable
+        _nonReentrant
+        returns (uint256 amount0, uint256 amount1)
+    {
+        if (_mintAmount == 0) revert MintZero();
+
+        /// encode calldata to pass through lock()
+        bytes memory data = abi.encode(
+            PoolManagerCalldata({
+                amount: _mintAmount,
+                msgSender: msg.sender,
+                receiver: _receiver,
+                actionType: ActionType.MINT
+            })
+        );
+        /// state variables to be able to bubble up amount0 and amount1 as return args
+        _a0 = _a1 = 0;
+
+        /// begin pool actions (passing data through lock() into _lockAcquiredMint())
+        poolManager.unlock(data);
+
+        /// handle eth refunds
+        if (poolKey.currency0.isAddressZero()) {
+            uint256 leftover = address(this).balance - hedgeCommitted0;
+            if (leftover > 0) _nativeTransfer(msg.sender, leftover);
+        }
+        if (poolKey.currency1.isAddressZero()) {
+            uint256 leftover = address(this).balance - hedgeCommitted1;
+            if (leftover > 0) _nativeTransfer(msg.sender, leftover);
+        }
+
+        /// set return arguments (stored during lock callback)
+        amount0 = _a0;
+        amount1 = _a1;
+
+        /// remit ERC20 liquidity shares to target receiver
+        _mint(_receiver, _mintAmount);
+    }
+
+    function burn(uint256 burnAmount_, address receiver_)
+        external
+        _nonReentrant
+        returns (uint256 amount0, uint256 amount1)
+    {
+        if (burnAmount_ == 0) revert BurnZero();
+        if (totalSupply() < burnAmount_) revert BurnExceedsSupply();
+
+        /// encode calldata to pass through lock()
+        bytes memory data = abi.encode(
+            PoolManagerCalldata({
+                amount: burnAmount_,
+                msgSender: msg.sender,
+                receiver: receiver_,
+                actionType: ActionType.BURN
+            })
+        );
+
+        /// state variables to be able to bubble up amount0 and amount1 as return args
+        _a0 = _a1 = 0;
+
+        /// begin pool actions (passing data through lock() into _lockAcquiredBurn())
+        poolManager.unlock(data);
+
+        /// set return arguments (stored during lock callback)
+        amount0 = _a0;
+        amount1 = _a1;
+
+        /// burn ERC20 LP shares of the caller
+        _burn(msg.sender, burnAmount_);
+    }
+
     function openPool(uint160 _newSqrtPriceX96) external {
         // Pool has no liquidity
         if (totalSupply() == 0) {
@@ -290,9 +363,174 @@ contract MEVArbitrage is BaseHook, ERC20, NonReentrant, IMEVArbitrage, IUnlockCa
         _mintLeftover();
     }
 
-    function _lockAcquiredMint(PoolManagerCalldata memory pmCalldata) internal {}
+    function _lockAcquiredMint(PoolManagerCalldata memory pmCalldata) internal {
+        uint256 totalSupply = totalSupply();
 
-    function _lockAcquiredBurn(PoolManagerCalldata memory pmCalldata) internal {}
+        if (totalSupply == 0) {
+            poolManager.modifyLiquidity(
+                poolKey,
+                IPoolManager.ModifyLiquidityParams({
+                    liquidityDelta: SafeCast.toInt256(pmCalldata.amount),
+                    tickLower: lowerTick,
+                    tickUpper: upperTick,
+                    salt: bytes32(0)
+                }),
+                ""
+            );
+
+            // casting to uint256 is ok for minting
+            _a0 = SafeCast.toUint256(poolManager.currencyDelta(address(this), poolKey.currency0));
+            _a1 = SafeCast.toUint256(poolManager.currencyDelta(address(this), poolKey.currency1));
+            if (_a0 > 0) {
+                poolKey.currency0.settle(poolManager, pmCalldata.msgSender, _a0, false);
+            }
+            if (_a1 > 0) {
+                poolKey.currency1.settle(poolManager, pmCalldata.msgSender, _a1, false);
+            }
+        } else {
+            uint128 liquidity;
+            /// if this is first touch in this block, then we need to _resetLiquidity() first
+            if (lastBlockOpened != block.number) {
+                (,, liquidity,) = _resetLiquidity(true);
+            } else {
+                (liquidity,,) = poolManager.getPositionInfo(
+                    PoolIdLibrary.toId(poolKey), address(this), lowerTick, upperTick, bytes32(0)
+                );
+            }
+
+            if (liquidity > 0) {
+                poolManager.modifyLiquidity(
+                    poolKey,
+                    IPoolManager.ModifyLiquidityParams({
+                        liquidityDelta: -SafeCast.toInt256(uint256(liquidity)),
+                        tickLower: lowerTick,
+                        tickUpper: upperTick,
+                        salt: bytes32(0)
+                    }),
+                    ""
+                );
+            }
+
+            _checkCurrencyBalances();
+
+            (, uint256 leftOver0,, uint256 leftOver1) = _get6909Balances();
+
+            // mint back the position.
+            uint256 newLiquidity = liquidity + FullMath.mulDiv(pmCalldata.amount, liquidity, totalSupply);
+
+            if (newLiquidity > 0) {
+                poolManager.modifyLiquidity(
+                    poolKey,
+                    IPoolManager.ModifyLiquidityParams({
+                        liquidityDelta: SafeCast.toInt256(newLiquidity),
+                        tickLower: lowerTick,
+                        tickUpper: upperTick,
+                        salt: bytes32(0)
+                    }),
+                    ""
+                );
+            }
+
+            uint256 amount0 = SafeCast.toUint256(poolManager.currencyDelta(address(this), poolKey.currency0));
+            uint256 amount1 = SafeCast.toUint256(poolManager.currencyDelta(address(this), poolKey.currency1));
+
+            amount0 += FullMath.mulDivRoundingUp(leftOver0, pmCalldata.amount, totalSupply);
+            amount1 += FullMath.mulDivRoundingUp(leftOver1, pmCalldata.amount, totalSupply);
+
+            if (amount0 > 0) {
+                poolKey.currency0.settle(poolManager, pmCalldata.msgSender, amount0, false);
+            }
+
+            if (amount1 > 0) {
+                poolKey.currency1.settle(poolManager, pmCalldata.msgSender, amount1, false);
+            }
+
+            _a0 = amount0;
+            _a1 = amount1;
+        }
+        _mintLeftover();
+
+        if (hedgeRequired0 > 0) {
+            hedgeRequired0 += FullMath.mulDiv(hedgeRequired0, pmCalldata.amount, totalSupply);
+        }
+        if (hedgeRequired1 > 0) {
+            hedgeRequired1 += FullMath.mulDiv(hedgeRequired1, pmCalldata.amount, totalSupply);
+        }
+
+        if (hedgeRequired0 > hedgeCommitted0 || hedgeRequired1 > hedgeCommitted1) revert InsufficientHedgeCommitted();
+    }
+
+    function _lockAcquiredBurn(PoolManagerCalldata memory pmCalldata) internal {
+        /// burn everything, positions and erc1155
+        uint256 totalSupply = totalSupply();
+
+        uint128 liquidity;
+        /// if this is first touch in this block, then we need to _resetLiquidity() first
+        if (lastBlockOpened != block.number) {
+            (,, liquidity,) = _resetLiquidity(true);
+        } else {
+            (liquidity,,) = poolManager.getPositionInfo(
+                PoolIdLibrary.toId(poolKey), address(this), lowerTick, upperTick, bytes32(0)
+            );
+        }
+
+        if (liquidity > 0) {
+            poolManager.modifyLiquidity(
+                poolKey,
+                IPoolManager.ModifyLiquidityParams({
+                    liquidityDelta: -SafeCast.toInt256(uint256(liquidity)),
+                    tickLower: lowerTick,
+                    tickUpper: upperTick,
+                    salt: bytes32(0)
+                }),
+                ""
+            );
+        }
+
+        _clear6909Balances();
+
+        (uint256 currency0Balance, uint256 currency1Balance) = _checkCurrencyBalances();
+        uint256 amount0 = FullMath.mulDiv(pmCalldata.amount, currency0Balance, totalSupply);
+        uint256 amount1 = FullMath.mulDiv(pmCalldata.amount, currency1Balance, totalSupply);
+
+        uint256 newLiquidity = liquidity - FullMath.mulDiv(pmCalldata.amount, liquidity, totalSupply);
+
+        if (newLiquidity > 0) {
+            poolManager.modifyLiquidity(
+                poolKey,
+                IPoolManager.ModifyLiquidityParams({
+                    liquidityDelta: SafeCast.toInt256(newLiquidity),
+                    tickLower: lowerTick,
+                    tickUpper: upperTick,
+                    salt: bytes32(0)
+                }),
+                ""
+            );
+        }
+
+        (currency0Balance, currency1Balance) = _checkCurrencyBalances();
+
+        amount0 = amount0 > currency0Balance ? currency0Balance : amount0;
+        amount1 = amount1 > currency1Balance ? currency1Balance : amount1;
+
+        // take amounts and send them to receiver
+        if (amount0 > 0) {
+            poolManager.take(poolKey.currency0, pmCalldata.receiver, amount0);
+        }
+        if (amount1 > 0) {
+            poolManager.take(poolKey.currency1, pmCalldata.receiver, amount1);
+        }
+
+        _a0 = amount0;
+        _a1 = amount1;
+        _mintLeftover();
+        if (hedgeRequired0 > 0) {
+            hedgeRequired0 -= FullMath.mulDiv(hedgeRequired0, pmCalldata.amount, totalSupply);
+        }
+        if (hedgeRequired1 > 0) {
+            hedgeRequired1 -= FullMath.mulDiv(hedgeRequired1, pmCalldata.amount, totalSupply);
+        }
+    }
 
     function _checkLastOpen() internal view returns (uint256) {
         /// compute block delta since last time pool was utilized.
@@ -533,15 +771,19 @@ contract MEVArbitrage is BaseHook, ERC20, NonReentrant, IMEVArbitrage, IUnlockCa
 
     function _transferToExternal(address _to, address _token, uint256 _amount) internal {
         if (_token == address(0)) {
-            bool success;
-            assembly {
-                success := call(gas(), _to, _amount, 0, 0, 0, 0)
-            }
-
-            if (!success) revert NativeTransferFailed();
+            _nativeTransfer(_to, _amount);
         } else {
             ERC20(_token).safeTransfer(_to, _amount);
         }
+    }
+
+    function _nativeTransfer(address _to, uint256 _amount) internal {
+        bool success;
+        assembly {
+            success := call(gas(), _to, _amount, 0, 0, 0, 0)
+        }
+
+        if (!success) revert NativeTransferFailed();
     }
 
     function _sqrt(uint256 x) internal pure returns (uint256 y) {

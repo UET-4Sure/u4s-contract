@@ -40,4 +40,16 @@ interface IMEVArbitrage {
 
     /// @notice Revert if arbitrage size is too small
     error ArbTooSmall();
+
+    /// @notice Revert if user mints 0 liquidity
+    error MintZero();
+
+    /// @notice Revert if user burn 0 liquidty
+    error BurnZero();
+
+    /// @notice Revert if amounts to burn exceed supply
+    error BurnExceedsSupply();
+
+    /// @notice Revert if hedge committed is not enough
+    error InsufficientHedgeCommitted();
 }
