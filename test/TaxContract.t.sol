@@ -14,23 +14,16 @@ contract TaxContractTest is Test {
     address user2 = address(0x2);
     address user3 = address(0x3);
     
-    uint256 constant INITIAL_TAX_RATE = 0.05e18; // 5%
-    uint256 constant MAX_TAX_RATE = 1e18; // 100%
-    uint256 constant INITIAL_TOKEN_SUPPLY = 1000000 * 10**18;
-
+    uint256 constant TAX_PERCENTAGE = 1e16; // 0.1%
+    uint256 constant TAX_DENOMINATOR = 1e18;
     event TaxWithdrawn(address indexed token, uint256 amount);
     event ETHWithdrawn(uint256 amount);
     event WhitelistUpdated(address indexed account, bool isWhitelisted);
-    event TaxRateUpdated(uint256 oldRate, uint256 newRate);
+    event TaxPercentageUpdated(uint256 oldPercentage, uint256 newPercentage);
 
     function setUp() public {
-        // Deploy contracts
-        taxContract = new TaxContract(INITIAL_TAX_RATE);
-        token = new MockToken("Test Token", "TEST", INITIAL_TOKEN_SUPPLY);
-        
-        // Fund the tax contract with some ETH and tokens
-        vm.deal(address(taxContract), 10 ether);
-        token.transfer(address(taxContract), 100000 * 10**18);
+        // Deploy tax contract with 0.1% tax rate
+        taxContract = new TaxContract(TAX_PERCENTAGE);
         
         // Give some ETH to test users
         vm.deal(user1, 1 ether);
@@ -184,19 +177,19 @@ contract TaxContractTest is Test {
 
     function test_CalculateTax() public {
         uint256 amount = 1000 * 10**18;
-        uint256 expectedTax = (amount * INITIAL_TAX_RATE) / 1e18;
-        
+        uint256 expectedTax = (amount * TAX_PERCENTAGE) / TAX_DENOMINATOR;
+        console2.log("expectedTax", expectedTax);
         assertEq(taxContract.calculateTax(amount), expectedTax);
         
         // Test with different tax rate
-        taxContract.setTaxRate(0.1e18); // 10%
-        expectedTax = (amount * 0.1e18) / 1e18;
+        taxContract.setTaxPercentage(0.1e18); // 10%
+        expectedTax = (amount * 0.1e18) / TAX_DENOMINATOR;
         assertEq(taxContract.calculateTax(amount), expectedTax);
     }
 
     function test_GetAmountAfterTax() public {
         uint256 amount = 1000 * 10**18;
-        uint256 tax = (amount * INITIAL_TAX_RATE) / 1e18;
+        uint256 tax = (amount * TAX_PERCENTAGE) / TAX_DENOMINATOR;
         uint256 expectedAmountAfterTax = amount - tax;
         
         assertEq(taxContract.getAmountAfterTax(amount), expectedAmountAfterTax);
