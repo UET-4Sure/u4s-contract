@@ -22,6 +22,8 @@ import {EasyPosm} from "./utils/EasyPosm.sol";
 import {Fixtures} from "./utils/Fixtures.sol";
 import {KYCContract} from "../src/KYCContract.sol";
 import {MockIdentitySBT} from "../src/mock/MockIdentitySBT.sol";
+import {TaxContract} from "../src/TaxContract.sol";
+import {console} from "forge-std/console.sol";
 
 contract MainHookTest is Test, Fixtures {
     using EasyPosm for IPositionManager;
@@ -33,10 +35,14 @@ contract MainHookTest is Test, Fixtures {
     PoolId poolId;
     MockIdentitySBT identitySBT;
     KYCContract kycContract;
+    TaxContract taxContract;
     MockV3Aggregator priceFeed;
     uint256 tokenId;
     int24 tickLower;
     int24 tickUpper;
+
+    uint256 constant TAX_PERCENTAGE = 1e15; // 0.1% tax rate
+    uint256 constant TAX_DENOMINATOR = 1e18;
 
     function setUp() public {
         // creates the pool manager, utility routers, and test tokens
@@ -52,6 +58,9 @@ contract MainHookTest is Test, Fixtures {
         // Deploy kyc contract
         kycContract = new KYCContract(address(identitySBT));
 
+        // Deploy tax contract with 0.1% tax rate
+        taxContract = new TaxContract(TAX_PERCENTAGE);
+
         // Set up price feeds for the actual tokens used in the pool
         priceFeed = new MockV3Aggregator(8, 1 * 10**8); // 8 decimals, initial price 1 USD
         kycContract.setPriceFeed(Currency.unwrap(currency0), address(priceFeed));
@@ -60,10 +69,10 @@ contract MainHookTest is Test, Fixtures {
         // Deploy the hook to an address with the correct flags
         address flags = address(
             uint160(
-                Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG
+                Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG
             ) ^ (0x4444 << 144) // Namespace the hook to avoid collisions
         );
-        bytes memory constructorArgs = abi.encode(manager, address(kycContract));
+        bytes memory constructorArgs = abi.encode(manager, address(kycContract), address(taxContract));
         deployCodeTo("MainHook.sol:MainHook", constructorArgs, flags);
         hook = MainHook(flags);
 
@@ -96,6 +105,10 @@ contract MainHookTest is Test, Fixtures {
             block.timestamp,
             ZERO_BYTES
         );
+
+        // Fund to pool manager
+        currency0.transfer(address(manager), 1000e18);
+        currency1.transfer(address(manager), 1000e18);
     }
 
     function testSwapWithKYC_LowVolume() public {
@@ -134,5 +147,31 @@ contract MainHookTest is Test, Fixtures {
         int256 amountSpecified = -1000e18;
         vm.expectRevert();
         swap(key, zeroForOne, amountSpecified, ZERO_BYTES);
+    }
+
+    function testSwapWithTaxFee() public {
+
+        // Test swap with 0.1% tax fee
+        bool zeroForOne = true;
+        int256 amountSpecified = -1000e18; // 1000 tokens
+        
+        // Calculate expected tax fee: 1000 * 0.001 = 1 token
+        uint256 expectedTaxFee = 1e18;
+        
+        // Record initial balances
+        uint256 initialTaxContractBalance0 = currency0.balanceOf(address(taxContract));
+        uint256 initialTaxContractBalance1 = currency1.balanceOf(address(taxContract));
+        
+        // Perform the swap
+        BalanceDelta swapDelta = swap(key, zeroForOne, amountSpecified, ZERO_BYTES);
+        
+        // Check that tax was collected
+        uint256 finalTaxContractBalance0 = currency0.balanceOf(address(taxContract));
+        uint256 finalTaxContractBalance1 = currency1.balanceOf(address(taxContract));
+        
+        // Since we're swapping currency0 for currency1 (zeroForOne = true), 
+        // the tax should be collected in currency0
+        assertEq(finalTaxContractBalance0 - initialTaxContractBalance0, expectedTaxFee, "Tax fee not collected correctly");
+        assertEq(finalTaxContractBalance1, initialTaxContractBalance1, "Unexpected tax collected in currency1");
     }
 } 
