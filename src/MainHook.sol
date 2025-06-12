@@ -27,16 +27,13 @@ contract MainHook is BaseHook, Ownable {
     // State variables
     IKYCContract public immutable kycContract;
 
-    constructor(
-        IPoolManager _poolManager,
-        address _kycContract
-    ) BaseHook(_poolManager) Ownable(msg.sender) {
+    constructor(IPoolManager _poolManager, address _kycContract) BaseHook(_poolManager) Ownable(msg.sender) {
         kycContract = IKYCContract(_kycContract);
     }
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
-            beforeInitialize: false,
+            beforeInitialize: true,
             afterInitialize: false,
             beforeAddLiquidity: true,
             afterAddLiquidity: false,
@@ -53,12 +50,11 @@ contract MainHook is BaseHook, Ownable {
         });
     }
 
-    function _beforeSwap(
-        address,
-        PoolKey calldata key,
-        IPoolManager.SwapParams calldata params,
-        bytes calldata
-    ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
+    function _beforeSwap(address, PoolKey calldata key, IPoolManager.SwapParams calldata params, bytes calldata)
+        internal
+        override
+        returns (bytes4, BeforeSwapDelta, uint24)
+    {
         uint256 amount = params.amountSpecified > 0 ? uint256(params.amountSpecified) : uint256(-params.amountSpecified);
         address token = _getSwapToken(key, params);
 
@@ -77,12 +73,11 @@ contract MainHook is BaseHook, Ownable {
     ) internal override returns (bytes4) {
         (uint256 amount0, uint256 amount1) = _calculateLiquidityAmounts(key, params);
 
-        if (!kycContract.isPermitKYCModifyLiquidity(
-            amount0,
-            Currency.unwrap(key.currency0),
-            amount1,
-            Currency.unwrap(key.currency1)
-        )) {
+        if (
+            !kycContract.isPermitKYCModifyLiquidity(
+                amount0, Currency.unwrap(key.currency0), amount1, Currency.unwrap(key.currency1)
+            )
+        ) {
             revert NotPermitKYCAddLiquidity();
         }
 
@@ -97,12 +92,11 @@ contract MainHook is BaseHook, Ownable {
     ) internal override returns (bytes4) {
         (uint256 amount0, uint256 amount1) = _calculateLiquidityAmounts(key, params);
 
-        if (!kycContract.isPermitKYCModifyLiquidity(
-            amount0,
-            Currency.unwrap(key.currency0),
-            amount1,
-            Currency.unwrap(key.currency1)
-        )) {
+        if (
+            !kycContract.isPermitKYCModifyLiquidity(
+                amount0, Currency.unwrap(key.currency0), amount1, Currency.unwrap(key.currency1)
+            )
+        ) {
             revert NotPermitKYCRemoveLiquidity();
         }
 
@@ -110,23 +104,24 @@ contract MainHook is BaseHook, Ownable {
     }
 
     // Internal helper functions
-    function _getSwapToken(PoolKey calldata key, IPoolManager.SwapParams calldata params) internal pure returns (address) {
+    function _getSwapToken(PoolKey calldata key, IPoolManager.SwapParams calldata params)
+        internal
+        pure
+        returns (address)
+    {
         if (params.zeroForOne) {
-            return params.amountSpecified > 0 
-                ? Currency.unwrap(key.currency1)
-                : Currency.unwrap(key.currency0);
+            return params.amountSpecified > 0 ? Currency.unwrap(key.currency1) : Currency.unwrap(key.currency0);
         } else {
-            return params.amountSpecified > 0
-                ? Currency.unwrap(key.currency0)
-                : Currency.unwrap(key.currency1);
+            return params.amountSpecified > 0 ? Currency.unwrap(key.currency0) : Currency.unwrap(key.currency1);
         }
     }
 
-    function _calculateLiquidityAmounts(
-        PoolKey calldata key,
-        IPoolManager.ModifyLiquidityParams calldata params
-    ) internal view returns (uint256 amount0, uint256 amount1) {
-        (uint160 sqrtPriceX96,,, ) = poolManager.getSlot0(key.toId());
+    function _calculateLiquidityAmounts(PoolKey calldata key, IPoolManager.ModifyLiquidityParams calldata params)
+        internal
+        view
+        returns (uint256 amount0, uint256 amount1)
+    {
+        (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(key.toId());
 
         // Get sqrt prices for the range
         uint160 sqrtPriceAX96 = TickMath.getSqrtPriceAtTick(params.tickLower);
@@ -134,10 +129,7 @@ contract MainHook is BaseHook, Ownable {
 
         // Calculate amounts for the given liquidity
         (amount0, amount1) = LiquidityAmounts.getAmountsForLiquidity(
-            sqrtPriceX96,
-            sqrtPriceAX96,
-            sqrtPriceBX96,
-            uint128(uint256(params.liquidityDelta))
+            sqrtPriceX96, sqrtPriceAX96, sqrtPriceBX96, uint128(uint256(params.liquidityDelta))
         );
     }
 }
