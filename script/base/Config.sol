@@ -36,8 +36,14 @@ contract Config {
     // KYC Contract
     address constant KYC_CONTRACT = address(0xa496e8d38896EA779BAf5c4B6B5E5389513A67a3);
 
+    // TAX PERCENTAGE
+    uint256 constant TAX_PERCENTAGE = 1e15;
+
+    // TAX CONTRACT
+    address constant TAX_CONTRACT = address(0xE1BE7cB86310dA886a44a6729D9Da9841bE3eE2a);
+
     // MAIN HOOK ADDRESS
-    address constant MAIN_HOOK = address(0xF1B65Ab2a975D3796bEb9d3Ea8786dEE235F0a80);
+    address constant MAIN_HOOK = address(0x1Ff2989dDF08D3a6c4e9EcC53895e89EdD98cAC8);
 
     // IHooks
     IHooks constant hookContract = IHooks(MAIN_HOOK);

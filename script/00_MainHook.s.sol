@@ -17,17 +17,17 @@ contract MainHookScript is Script, Config, Constants {
     function run() public {
         // hook contracts must have specific flags encoded in the address
         uint160 flags = uint160(
-            Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG
+            Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG
         );
 
         // Mine a salt that will produce a hook address with the correct flags
-        bytes memory constructorArgs = abi.encode(POOLMANAGER, KYC_CONTRACT);
+        bytes memory constructorArgs = abi.encode(POOLMANAGER, KYC_CONTRACT, TAX_CONTRACT);
         (address hookAddress, bytes32 salt) =
             HookMiner.find(CREATE2_DEPLOYER, flags, type(MainHook).creationCode, constructorArgs);
 
         // Deploy the hook using CREATE2
         vm.broadcast();
-        MainHook mainHook = new MainHook{salt: salt}(IPoolManager(POOLMANAGER), KYC_CONTRACT);
+        MainHook mainHook = new MainHook{salt: salt}(IPoolManager(POOLMANAGER), KYC_CONTRACT, TAX_CONTRACT);
         require(address(mainHook) == hookAddress, "MainHookScript: hook address mismatch");
     }
 }
