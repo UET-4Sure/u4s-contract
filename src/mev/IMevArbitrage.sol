@@ -52,4 +52,10 @@ interface IMEVArbitrage {
 
     /// @notice Revert if hedge committed is not enough
     error InsufficientHedgeCommitted();
+
+    /// @notice Revert if user modify liquidity through pool manager
+    error OnlyModifyViaHook();
+
+    /// @notice Revert if wrong poolkey
+    error WrongPoolKey();
 }

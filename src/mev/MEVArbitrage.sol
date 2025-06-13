@@ -19,6 +19,7 @@ import {CurrencySettler} from "src/helper/CurrencySettler.sol";
 import {TransientStateLibrary} from "v4-core/src/libraries/TransientStateLibrary.sol";
 import {LiquidityAmounts} from "src/helper/LiquidityAmounts.sol";
 import {FullMath} from "v4-core/src/libraries/FullMath.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/src/types/BeforeSwapDelta.sol";
 
 import {NonReentrant} from "src/helper/NonReentrant.sol";
 import {ERC20} from "openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -88,6 +89,13 @@ contract MEVArbitrage is BaseHook, ERC20, NonReentrant, IMEVArbitrage, IUnlockCa
         uint24 betaFactor;
     }
 
+    modifier _checkPoolKey(PoolKey calldata _poolKey) {
+        if (PoolId.unwrap(_poolKey.toId()) != PoolId.unwrap(poolKey.toId())) {
+            revert WrongPoolKey();
+        }
+        _;
+    }
+
     constructor(
         IPoolManager _poolManager,
         int24 _tickSpacing,
@@ -125,6 +133,96 @@ contract MEVArbitrage is BaseHook, ERC20, NonReentrant, IMEVArbitrage, IUnlockCa
             afterAddLiquidityReturnDelta: false,
             afterRemoveLiquidityReturnDelta: false
         });
+    }
+
+    function _beforeInitialize(address, PoolKey calldata _poolKey, uint160 sqrtPriceX96)
+        internal
+        override
+        returns (bytes4)
+    {
+        _initialize(_poolKey, sqrtPriceX96);
+        return this.beforeInitialize.selector;
+    }
+
+    function _beforeSwap(address sender, PoolKey calldata _poolKey, IPoolManager.SwapParams calldata, bytes calldata)
+        internal
+        view
+        override
+        _checkPoolKey(_poolKey)
+        returns (bytes4, BeforeSwapDelta, uint24)
+    {
+        /// if swap is coming from the hook then its a 1 wei swap to kick the price and not a "normal" swap
+        if (sender != address(this)) {
+            /// disallow normal swaps at top of block
+            if (lastBlockOpened != block.number) revert PoolNotOpen();
+        }
+        if (PoolId.unwrap(_poolKey.toId()) != PoolId.unwrap(poolKey.toId())) {
+            revert WrongPoolKey();
+        }
+        return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+    }
+
+    function _afterSwap(
+        address sender,
+        PoolKey calldata _poolKey,
+        IPoolManager.SwapParams calldata,
+        BalanceDelta,
+        bytes calldata
+    ) internal override _checkPoolKey(_poolKey) returns (bytes4, int128) {
+        /// if swap is coming from the hook then its a 1 wei swap to kick the price and not a "normal" swap
+        if (sender != address(this)) {
+            (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(PoolIdLibrary.toId(poolKey));
+            if (sqrtPriceX96 >= sqrtPriceX96Upper || sqrtPriceX96 <= sqrtPriceX96Lower) revert PriceOutOfBounds();
+
+            (uint128 curLiquidity,,) =
+                poolManager.getPositionInfo(poolKey.toId(), address(this), lowerTick, upperTick, bytes32(0));
+            (uint256 current0, uint256 current1) = LiquidityAmounts.getAmountsForLiquidity(
+                sqrtPriceX96, sqrtPriceX96Lower, sqrtPriceX96Upper, curLiquidity
+            );
+
+            (uint256 need0, uint256 need1) = LiquidityAmounts.getAmountsForLiquidity(
+                committedSqrtPriceX96, sqrtPriceX96Lower, sqrtPriceX96Upper, curLiquidity
+            );
+
+            if (need0 > current0) {
+                uint256 min0 = need0 - current0;
+                if (min0 > hedgeCommitted0) revert InsufficientHedgeCommitted();
+                hedgeRequired0 = min0;
+                hedgeRequired1 = 0;
+            } else if (need1 > current1) {
+                uint256 min1 = need1 - current1;
+                if (min1 > hedgeCommitted1) revert InsufficientHedgeCommitted();
+                hedgeRequired1 = min1;
+                hedgeRequired0 = 0;
+            } else {
+                hedgeRequired0 = 0;
+                hedgeRequired1 = 0;
+            }
+        }
+
+        return (this.afterSwap.selector, 0);
+    }
+
+    function _beforeAddLiquidity(
+        address sender,
+        PoolKey calldata _poolKey,
+        IPoolManager.ModifyLiquidityParams calldata,
+        bytes calldata
+    ) internal view override _checkPoolKey(_poolKey) returns (bytes4) {
+        /// force LPs to provide liquidity through hook
+        if (sender != address(this)) revert OnlyModifyViaHook();
+        return this.beforeAddLiquidity.selector;
+    }
+
+    function _beforeRemoveLiquidity(
+        address sender,
+        PoolKey calldata _poolKey,
+        IPoolManager.ModifyLiquidityParams calldata,
+        bytes calldata
+    ) internal view override _checkPoolKey(_poolKey) returns (bytes4) {
+        /// force LPs to remove liquidity through hook
+        if (sender != address(this)) revert OnlyModifyViaHook();
+        return this.beforeRemoveLiquidity.selector;
     }
 
     function _initialize(PoolKey memory _poolKey, uint160 _newSqrtPriceX96) internal {
@@ -565,7 +663,7 @@ contract MEVArbitrage is BaseHook, ERC20, NonReentrant, IMEVArbitrage, IUnlockCa
         if (new0 == current0 || new1 == current1) revert ArbTooSmall();
         bool zeroForOne = new0 > current0;
 
-        /// differential of info.liquidity amount0/1 at those two prices gives X and Y of classic UniV2 swap
+        /// differential of curLiquidity amount0/1 at those two prices gives X and Y of classic UniV2 swap
         /// to get (1-Beta)*X and (1-Beta)*Y for our swap apply `factor`
         swap0 = FullMath.mulDiv(zeroForOne ? new0 - current0 : current0 - new0, params.betaFactor, _PIPS);
         swap1 = FullMath.mulDiv(zeroForOne ? current1 - new1 : new1 - current1, params.betaFactor, _PIPS);
