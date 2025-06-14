@@ -477,8 +477,8 @@ contract MEVArbitrage is BaseHook, ERC20, NonReentrant, IMEVArbitrage, IUnlockCa
             );
 
             // casting to uint256 is ok for minting
-            _a0 = SafeCast.toUint256(poolManager.currencyDelta(address(this), poolKey.currency0));
-            _a1 = SafeCast.toUint256(poolManager.currencyDelta(address(this), poolKey.currency1));
+            _a0 = SafeCast.toUint256(-poolManager.currencyDelta(address(this), poolKey.currency0));
+            _a1 = SafeCast.toUint256(-poolManager.currencyDelta(address(this), poolKey.currency1));
             if (_a0 > 0) {
                 poolKey.currency0.settle(poolManager, pmCalldata.msgSender, _a0, false);
             }
@@ -805,12 +805,12 @@ contract MEVArbitrage is BaseHook, ERC20, NonReentrant, IMEVArbitrage, IUnlockCa
 
     function _checkCurrencyBalances() internal view returns (uint256, uint256) {
         int256 currency0BalanceRaw = poolManager.currencyDelta(address(this), poolKey.currency0);
-        if (currency0BalanceRaw > 0) revert InvalidCurrencyDelta();
-        uint256 currency0Balance = SafeCast.toUint256(-currency0BalanceRaw);
+        if (currency0BalanceRaw < 0) revert InvalidCurrencyDelta();
+        uint256 currency0Balance = SafeCast.toUint256(currency0BalanceRaw);
 
         int256 currency1BalanceRaw = poolManager.currencyDelta(address(this), poolKey.currency1);
-        if (currency1BalanceRaw > 0) revert InvalidCurrencyDelta();
-        uint256 currency1Balance = SafeCast.toUint256(-currency1BalanceRaw);
+        if (currency1BalanceRaw < 0) revert InvalidCurrencyDelta();
+        uint256 currency1Balance = SafeCast.toUint256(currency1BalanceRaw);
 
         return (currency0Balance, currency1Balance);
     }
