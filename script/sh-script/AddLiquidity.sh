@@ -3,4 +3,5 @@ forge script script/02_AddLiquidity.s.sol \
     --private-key $PRIVATE_KEY \
     --broadcast \
     --verify \
+    --slow \
     -vvvv
