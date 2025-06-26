@@ -62,7 +62,7 @@ contract MainHookTest is Test, Fixtures {
         taxContract = new TaxContract(TAX_PERCENTAGE);
 
         // Set up price feeds for the actual tokens used in the pool
-        priceFeed = new MockV3Aggregator(8, 1 * 10**8); // 8 decimals, initial price 1 USD
+        priceFeed = new MockV3Aggregator(8, 1 * 10 ** 8); // 8 decimals, initial price 1 USD
         kycContract.setPriceFeed(Currency.unwrap(currency0), address(priceFeed));
         kycContract.setPriceFeed(Currency.unwrap(currency1), address(priceFeed));
 
@@ -120,7 +120,7 @@ contract MainHookTest is Test, Fixtures {
     }
 
     function testSwapWithKYC_HighVolume() public {
-        priceFeed.updateAnswer(5001 * 10**8);
+        priceFeed.updateAnswer(5001 * 10 ** 8);
 
         // Test swap with KYC'ed user
         bool zeroForOne = true;
@@ -130,7 +130,7 @@ contract MainHookTest is Test, Fixtures {
     }
 
     function testSwapWithKYC() public {
-        priceFeed.updateAnswer(500 * 10**8);
+        priceFeed.updateAnswer(500 * 10 ** 8);
 
         // Test swap with KYC'ed user
         bool zeroForOne = true;
@@ -174,4 +174,4 @@ contract MainHookTest is Test, Fixtures {
         assertEq(finalTaxContractBalance0 - initialTaxContractBalance0, expectedTaxFee, "Tax fee not collected correctly");
         assertEq(finalTaxContractBalance1, initialTaxContractBalance1, "Unexpected tax collected in currency1");
     }
-} 
+}

@@ -16,13 +16,13 @@ contract KYCContract is Config, Ownable {
     IIdentitySBT public immutable identitySBT;
     mapping(address => bool) private _restrictedUsers;
     mapping(address => bool) private _restrictedTokens;
-    
+
     // Configurable volume limits
     uint256 public minVolumeSwap;
     uint256 public maxVolumeSwap;
     uint256 public minVolumeModifyLiquidity;
     uint256 public maxVolumeModifyLiquidity;
-    
+
     // Events
     event RestrictedUsersUpdated(address[] users, bool[] restricted);
     event RestrictedTokensUpdated(address[] tokens, bool[] restricted);
@@ -35,18 +35,16 @@ contract KYCContract is Config, Ownable {
     error Unauthorized();
     error InvalidVolumeLimits();
 
-    uint256 constant CHAINLINK_DECIMALS = 8;    
+    uint256 constant CHAINLINK_DECIMALS = 8;
 
-    constructor(
-        address _identitySBT
-    ) Ownable(msg.sender) {
+    constructor(address _identitySBT) Ownable(msg.sender) {
         if (_identitySBT == address(0)) revert("Invalid identity SBT address");
-        
+
         identitySBT = IIdentitySBT(_identitySBT);
-        minVolumeSwap = 500 * 10**18 * 10**CHAINLINK_DECIMALS;
-        maxVolumeSwap = 10000 * 10**18 * 10**CHAINLINK_DECIMALS;
-        minVolumeModifyLiquidity = 500 * 10**18 * 10**CHAINLINK_DECIMALS;
-        maxVolumeModifyLiquidity = 1000000 * 10**18 * 10**CHAINLINK_DECIMALS;
+        minVolumeSwap = 500 * 10 ** 18 * 10 ** CHAINLINK_DECIMALS;
+        maxVolumeSwap = 10000 * 10 ** 18 * 10 ** CHAINLINK_DECIMALS;
+        minVolumeModifyLiquidity = 500 * 10 ** 18 * 10 ** CHAINLINK_DECIMALS;
+        maxVolumeModifyLiquidity = 1000000 * 10 ** 18 * 10 ** CHAINLINK_DECIMALS;
     }
 
     /**
@@ -56,7 +54,7 @@ contract KYCContract is Config, Ownable {
      */
     function _queryPrice(address priceFeed) internal view returns (uint256) {
         if (priceFeed == address(0)) revert PriceFeedNotSet();
-        (,int256 answer,,,) = AggregatorV3Interface(priceFeed).latestRoundData();
+        (, int256 answer,,,) = AggregatorV3Interface(priceFeed).latestRoundData();
         return uint256(answer);
     }
 
@@ -73,7 +71,7 @@ contract KYCContract is Config, Ownable {
         }
 
         uint256 price = _queryPrice(priceFeeds[token]);
-        uint256 volume = amount * price;     
+        uint256 volume = amount * price;
 
         // Allow transactions below minimum volume
         if (volume <= minVolumeSwap) {
@@ -97,12 +95,11 @@ contract KYCContract is Config, Ownable {
      * @param token1 The token1 address
      * @return bool Whether the transaction is permitted
      */
-    function isPermitKYCModifyLiquidity(
-        uint256 amount0, 
-        address token0, 
-        uint256 amount1, 
-        address token1
-    ) public view returns (bool) {
+    function isPermitKYCModifyLiquidity(uint256 amount0, address token0, uint256 amount1, address token1)
+        public
+        view
+        returns (bool)
+    {
         // Check restrictions
         if (_restrictedUsers[tx.origin] || _restrictedTokens[token0] || _restrictedTokens[token1]) {
             return false;
@@ -111,17 +108,17 @@ contract KYCContract is Config, Ownable {
         address priceFeed0 = priceFeeds[token0];
         address priceFeed1 = priceFeeds[token1];
         if (priceFeed0 == address(0) || priceFeed1 == address(0)) revert PriceFeedNotSet();
-        
+
         uint256 price0 = _queryPrice(priceFeed0);
         uint256 price1 = _queryPrice(priceFeed1);
-        
+
         uint256 totalVolume = amount0 * price0 + amount1 * price1;
 
-        if(totalVolume <= minVolumeModifyLiquidity) {
+        if (totalVolume <= minVolumeModifyLiquidity) {
             return true;
         }
 
-        if(totalVolume > maxVolumeModifyLiquidity) {
+        if (totalVolume > maxVolumeModifyLiquidity) {
             return false;
         }
 
@@ -135,10 +132,10 @@ contract KYCContract is Config, Ownable {
      */
     function setVolumeLimitsSwap(uint256 _minVolume, uint256 _maxVolume) external onlyOwner {
         if (_minVolume >= _maxVolume) revert InvalidVolumeLimits();
-        
+
         minVolumeSwap = _minVolume;
         maxVolumeSwap = _maxVolume;
-        
+
         emit VolumeLimitsUpdated(_minVolume, _maxVolume);
     }
 
@@ -149,10 +146,10 @@ contract KYCContract is Config, Ownable {
      */
     function setVolumeLimitsModifyLiquidity(uint256 _minVolume, uint256 _maxVolume) external onlyOwner {
         if (_minVolume >= _maxVolume) revert InvalidVolumeLimits();
-        
+
         minVolumeModifyLiquidity = _minVolume;
         maxVolumeModifyLiquidity = _maxVolume;
-        
+
         emit VolumeLimitsUpdated(_minVolume, _maxVolume);
     }
 
@@ -163,11 +160,11 @@ contract KYCContract is Config, Ownable {
      */
     function setRestrictedUsers(address[] calldata users, bool[] calldata restricted) external onlyOwner {
         if (users.length != restricted.length) revert InvalidInputLength();
-        
+
         for (uint256 i = 0; i < users.length; i++) {
             _restrictedUsers[users[i]] = restricted[i];
         }
-        
+
         emit RestrictedUsersUpdated(users, restricted);
     }
 
@@ -178,11 +175,11 @@ contract KYCContract is Config, Ownable {
      */
     function setRestrictedTokens(address[] calldata tokens, bool[] calldata restricted) external onlyOwner {
         if (tokens.length != restricted.length) revert InvalidInputLength();
-        
+
         for (uint256 i = 0; i < tokens.length; i++) {
             _restrictedTokens[tokens[i]] = restricted[i];
         }
-        
+
         emit RestrictedTokensUpdated(tokens, restricted);
     }
 
