@@ -31,13 +31,19 @@ contract Config {
     address public constant EUR_PRICE_FEED = 0x1a81afB8146aeFfCFc5E50e8479e826E7D55b910;
 
     // IDENTITY SBT ADDRESS
-    address constant IDENTITY_SBT = address(0xb117d1c006fC208FEAFFE5E08529BE5de8235B73);
+    address constant IDENTITY_SBT = address(0xF555752b80FD128421730B540d2D63542C9221F6);
 
     // KYC Contract
     address constant KYC_CONTRACT = address(0xa496e8d38896EA779BAf5c4B6B5E5389513A67a3);
 
+    // TAX PERCENTAGE
+    uint256 constant TAX_PERCENTAGE = 1e15;
+
+    // TAX CONTRACT
+    address constant TAX_CONTRACT = address(0xE1BE7cB86310dA886a44a6729D9Da9841bE3eE2a);
+
     // MAIN HOOK ADDRESS
-    address constant MAIN_HOOK = address(0xF1B65Ab2a975D3796bEb9d3Ea8786dEE235F0a80);
+    address constant MAIN_HOOK = address(0x1Ff2989dDF08D3a6c4e9EcC53895e89EdD98cAC8);
 
     // IHooks
     IHooks constant hookContract = IHooks(MAIN_HOOK);

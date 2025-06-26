@@ -8,13 +8,15 @@ import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
-import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/src/types/BeforeSwapDelta.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "v4-core/src/types/BeforeSwapDelta.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IKYCContract} from "./interfaces/IKYCContract.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 import {LiquidityAmounts} from "lib/uniswap-hooks/lib/v4-periphery/lib/v4-core/test/utils/LiquidityAmounts.sol";
 import {StateLibrary} from "v4-core/src/libraries/StateLibrary.sol";
+import {ITaxContract} from "./interfaces/ITaxContract.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract MainHook is BaseHook, Ownable {
     using PoolIdLibrary for PoolKey;
@@ -27,9 +29,17 @@ contract MainHook is BaseHook, Ownable {
 
     // State variables
     IKYCContract public immutable kycContract;
+    ITaxContract public immutable taxContract;
 
-    constructor(IPoolManager _poolManager, address _kycContract) BaseHook(_poolManager) Ownable(msg.sender) {
+    mapping(address => uint256) public taxFees; // token => tax fee
+
+    constructor(
+        IPoolManager _poolManager,
+        address _kycContract,
+        address _taxContract
+    ) BaseHook(_poolManager) Ownable(msg.sender) {
         kycContract = IKYCContract(_kycContract);
+        taxContract = ITaxContract(_taxContract);
     }
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
@@ -44,27 +54,47 @@ contract MainHook is BaseHook, Ownable {
             afterSwap: true,
             beforeDonate: false,
             afterDonate: false,
-            beforeSwapReturnDelta: false,
+            beforeSwapReturnDelta: true,
             afterSwapReturnDelta: false,
             afterAddLiquidityReturnDelta: false,
             afterRemoveLiquidityReturnDelta: false
         });
     }
 
-    function _beforeSwap(address sender, PoolKey calldata key, IPoolManager.SwapParams calldata params, bytes calldata)
-        internal
-        override
-        returns (bytes4, BeforeSwapDelta, uint24)
-    {
+    function _beforeSwap(
+        address,
+        PoolKey calldata key,
+        IPoolManager.SwapParams calldata params,
+        bytes calldata
+    ) internal override returns (bytes4, BeforeSwapDelta delta, uint24) {
         uint256 amount = params.amountSpecified > 0 ? uint256(params.amountSpecified) : uint256(-params.amountSpecified);
-        address token = _getSwapToken(key, params);
+        address token = _getSwapExactToken(key, params);
 
+        // check kyc
         if (!kycContract.isPermitKYCSwap(amount, token)) {
             revert NotPermitKYCSwap();
         }
 
-        return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        // apply tax
+        delta = _applyTax(key, params, amount);
+        
+        // Return 0 for lpFeeOverride as we're not changing the LP fee
+        return (BaseHook.beforeSwap.selector, delta, 0);
     }
+
+    function _afterSwap(
+        address,
+        PoolKey calldata key,
+        IPoolManager.SwapParams calldata params,
+        BalanceDelta,
+        bytes calldata
+    ) internal override returns (bytes4, int128) {
+        // transfer tax fee to tax contract
+        _transferTaxFee(key, params);
+        
+        return (BaseHook.afterSwap.selector, 0);
+    }
+
 
     function _beforeAddLiquidity(
         address,
@@ -104,12 +134,35 @@ contract MainHook is BaseHook, Ownable {
         return BaseHook.beforeRemoveLiquidity.selector;
     }
 
+    function _transferTaxFee(PoolKey calldata key, IPoolManager.SwapParams calldata params) internal {
+        address token = _getSwapTokenIn(key, params);
+        uint256 fee = taxFees[token];
+        if (fee > 0) {
+            poolManager.take(Currency.wrap(token), address(taxContract), fee);
+            taxFees[token] = 0;
+        }
+    }
+
     // Internal helper functions
-    function _getSwapToken(PoolKey calldata key, IPoolManager.SwapParams calldata params)
-        internal
-        pure
-        returns (address)
-    {
+    function _applyTax(
+        PoolKey calldata key,
+        IPoolManager.SwapParams calldata params,
+        uint256 amount
+    ) internal returns (BeforeSwapDelta delta) {
+        // Calculate a tax fee
+        uint256 fee = taxContract.calculateTax(amount);
+        int128 feeInt = int128(int256(fee));
+
+        // Create the BeforeSwapDelta using toBeforeSwapDelta function
+        delta = toBeforeSwapDelta(feeInt, 0);
+
+        address tokenIn = _getSwapTokenIn(key, params);
+        taxFees[tokenIn] = fee;
+
+        return delta;
+    }
+
+    function _getSwapExactToken(PoolKey calldata key, IPoolManager.SwapParams calldata params) internal pure returns (address) {
         if (params.zeroForOne) {
             return params.amountSpecified > 0 ? Currency.unwrap(key.currency1) : Currency.unwrap(key.currency0);
         } else {
@@ -117,12 +170,18 @@ contract MainHook is BaseHook, Ownable {
         }
     }
 
-    function _calculateLiquidityAmounts(PoolKey calldata key, IPoolManager.ModifyLiquidityParams calldata params)
-        internal
-        view
-        returns (uint256 amount0, uint256 amount1)
-    {
-        (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(key.toId());
+    function _getSwapTokenIn(PoolKey calldata key, IPoolManager.SwapParams calldata params) internal pure returns (address) {
+        return params.zeroForOne ? Currency.unwrap(key.currency0) : Currency.unwrap(key.currency1);
+    }
+
+    function _calculateLiquidityAmounts(
+        PoolKey calldata key,
+        IPoolManager.ModifyLiquidityParams calldata params
+    ) internal view returns (uint256 amount0, uint256 amount1) {
+        // Get current sqrt price
+        bytes32 stateSlot = keccak256(abi.encode(key.toId(), uint256(0)));
+        bytes32 data = poolManager.extsload(stateSlot);
+        uint160 sqrtPriceX96 = uint160(uint256(data));
 
         // Get sqrt prices for the range
         uint160 sqrtPriceAX96 = TickMath.getSqrtPriceAtTick(params.tickLower);
@@ -133,4 +192,5 @@ contract MainHook is BaseHook, Ownable {
             sqrtPriceX96, sqrtPriceAX96, sqrtPriceBX96, uint128(uint256(params.liquidityDelta))
         );
     }
+
 }
