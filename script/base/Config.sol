@@ -31,7 +31,7 @@ contract Config {
     address public constant EUR_PRICE_FEED = 0x1a81afB8146aeFfCFc5E50e8479e826E7D55b910;
 
     // IDENTITY SBT ADDRESS
-    address constant IDENTITY_SBT = address(0xb117d1c006fC208FEAFFE5E08529BE5de8235B73);
+    address constant IDENTITY_SBT = address(0xF555752b80FD128421730B540d2D63542C9221F6);
 
     // KYC Contract
     address constant KYC_CONTRACT = address(0xa496e8d38896EA779BAf5c4B6B5E5389513A67a3);
