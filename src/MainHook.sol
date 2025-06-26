@@ -44,7 +44,7 @@ contract MainHook is BaseHook, Ownable {
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
-            beforeInitialize: true,
+            beforeInitialize: false,
             afterInitialize: false,
             beforeAddLiquidity: true,
             afterAddLiquidity: false,
