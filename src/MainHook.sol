@@ -13,7 +13,7 @@ import {IKYCContract} from "./interfaces/IKYCContract.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 import {LiquidityAmounts} from "lib/uniswap-hooks/lib/v4-periphery/lib/v4-core/test/utils/LiquidityAmounts.sol";
-import {StateLibrary} from "lib/uniswap-hooks/lib/v4-core/src/libraries/StateLibrary.sol";
+import {StateLibrary} from "v4-core/src/libraries/StateLibrary.sol";
 import {ITaxContract} from "./interfaces/ITaxContract.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -184,9 +184,7 @@ contract MainHook is BaseHook, Ownable {
         IPoolManager.ModifyLiquidityParams calldata params
     ) internal view returns (uint256 amount0, uint256 amount1) {
         // Get current sqrt price
-        bytes32 stateSlot = keccak256(abi.encode(key.toId(), uint256(0)));
-        bytes32 data = poolManager.extsload(stateSlot);
-        uint160 sqrtPriceX96 = uint160(uint256(data));
+        (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(key.toId());
 
         // Get sqrt prices for the range
         uint160 sqrtPriceAX96 = TickMath.getSqrtPriceAtTick(params.tickLower);
