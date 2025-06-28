@@ -4,6 +4,7 @@ pragma solidity ^0.8.19;
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
 import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
+import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 
 /// @notice Shared configuration between scripts
 contract Config {
@@ -34,25 +35,39 @@ contract Config {
     address constant IDENTITY_SBT = address(0xF555752b80FD128421730B540d2D63542C9221F6);
 
     // KYC Contract
-    address constant KYC_CONTRACT = address(0xa496e8d38896EA779BAf5c4B6B5E5389513A67a3);
+    address constant KYC_CONTRACT = address(0xa3AE13adF3DA4d1AD819EF2cF8C3F5D0a0E6A2F0);
 
     // TAX PERCENTAGE
     uint256 constant TAX_PERCENTAGE = 1e15;
 
     // TAX CONTRACT
-    address constant TAX_CONTRACT = address(0xE1BE7cB86310dA886a44a6729D9Da9841bE3eE2a);
+    address constant TAX_CONTRACT = address(0x4fA6a8e870f38308dFCB9320dfaE80ec6dD57B09);
 
     // MAIN HOOK ADDRESS
-    address constant MAIN_HOOK = address(0x1Ff2989dDF08D3a6c4e9EcC53895e89EdD98cAC8);
+    address constant MAIN_HOOK = address(0x37fD86A65078c7C1e94c867165d2ff6328F54ac8);
 
     // IHooks
     IHooks constant hookContract = IHooks(MAIN_HOOK);
 
     // TOKEN & CURRENCY for pool
-    IERC20 constant token0 = IERC20(USDC);
-    IERC20 constant token1 = IERC20(WETH);
-    Currency constant currency0 = usdc;
-    Currency constant currency1 = weth;
+    IERC20 constant token0 = IERC20(EUR);
+    IERC20 constant token1 = IERC20(LINK);
+    Currency constant currency0 = eur;
+    Currency constant currency1 = link;
+
+    /*
+        CURRENT POOLS:
+        USDC - WETH
+        USDC - WBTC
+        USDC - LINK
+        USDC - EUR
+        WBTC - WETH
+        WETH - LINK
+        EUR - WETH
+        WBTC - LINK
+        WBTC - EUR
+        EUR - LINK
+    */
 
     constructor() {
         priceFeeds[USDC] = USDC_PRICE_FEED;
