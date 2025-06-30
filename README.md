@@ -1,108 +1,138 @@
-# v4-template
-### **A template for writing Uniswap v4 Hooks 🦄**
+# NolaSwap - Compliant DEX Built on Uniswap v4
 
-[`Use this Template`](https://github.com/uniswapfoundation/v4-template/generate)
+NolaSwap is a decentralized exchange (DEX) built on Uniswap v4, focusing on regulatory compliance while maintaining decentralization and privacy. This implementation includes advanced features for KYC/AML, automated tax collection, and MEV protection.
 
-1. The example hook [Counter.sol](src/Counter.sol) demonstrates the `beforeSwap()` and `afterSwap()` hooks
-2. The test template [Counter.t.sol](test/Counter.t.sol) preconfigures the v4 pool manager, test tokens, and test liquidity.
+## Technical Architecture
 
-<details>
-<summary>Updating to v4-template:latest</summary>
+### Core Contracts
 
-This template is actively maintained -- you can update the v4 dependencies, scripts, and helpers: 
+1. **KYCContract.sol**
+   - Manages KYC verification and volume restrictions
+   - Implements tiered trading limits based on KYC level
+   - Uses Chainlink price feeds for volume calculations
+   - Features:
+     - Volume-based KYC requirements
+     - Token and user restriction capabilities
+     - Configurable trading limits for swaps and liquidity operations
+
+2. **MainHook.sol**
+   - Core hook implementation for Uniswap v4
+   - Handles swap validation and liquidity management
+   - Integrates with KYC and Tax contracts
+   - Key features:
+     - Pre-swap validation
+     - Liquidity position management
+     - MEV protection mechanisms
+
+3. **TaxContract.sol**
+   - Manages automated tax collection
+   - Configurable tax rates and whitelisting
+   - Transparent on-chain tax storage
+   - Features:
+     - Automated 0.1% tax collection
+     - Whitelist management
+     - Tax withdrawal mechanisms
+     - Support for both ERC20 and native currency
+
+4. **MEVArbitrage.sol**
+   - Implements MEV protection mechanisms
+   - Features:
+     - Price commitment mechanism
+     - Liquidity rebalancing
+     - Arbitrage control
+     - Protection against sandwich attacks
+
+## Key Technical Features
+
+### Identity Verification
+- SoulBound Token (SBT) based identity verification
+- Three-tier KYC system with different trading limits
+- Privacy-preserving verification mechanism
+
+### Trading Protection
+```solidity
+function isPermitKYCSwap(uint256 amount, address token) public view returns (bool)
+function isPermitKYCModifyLiquidity(uint256 amount0, address token0, uint256 amount1, address token1) public view returns (bool)
+```
+- Volume-based trading restrictions
+- Smart anti-money laundering checks
+- Real-time price feed integration
+
+### Tax Management
+```solidity
+function calculateTax(uint256 amount) external view returns (uint256)
+function withdrawERC20(address token, uint256 amount) external
+```
+- Automated tax collection system
+- Transparent tax storage
+- Configurable tax rates
+- Support for multiple tokens
+
+### MEV Protection
+```solidity
+function openPool(uint160 _newSqrtPriceX96) external
+function depositHedgeCommitment(uint256 amount0, uint256 amount1) external payable
+```
+- Price commitment mechanism
+- Liquidity provider protection
+- Anti-sandwich attack measures
+- Fair ordering system
+
+## Technical Requirements
+
+- Solidity ^0.8.24
+- Uniswap v4 Core
+- OpenZeppelin Contracts
+- Chainlink Price Feeds
+
+## Development Setup
+
+1. Clone the repository
 ```bash
-git remote add template https://github.com/uniswapfoundation/v4-template
-git fetch template
-git merge template/main <BRANCH> --allow-unrelated-histories
+git clone https://github.com/your-repo/nolaswap.git
 ```
 
-</details>
-
----
-
-### Check Forge Installation
-*Ensure that you have correctly installed Foundry (Forge) Stable. You can update Foundry by running:*
-
-```
-foundryup
-```
-
-> *v4-template* appears to be _incompatible_ with Foundry Nightly. See [foundry announcements](https://book.getfoundry.sh/announcements) to revert back to the stable build
-
-
-
-## Set up
-
-*requires [foundry](https://book.getfoundry.sh)*
-
-```
+2. Install dependencies
+```bash
 forge install
+```
+
+3. Compile contracts
+```bash
+forge build
+```
+
+4. Run tests
+```bash
 forge test
 ```
 
-### Local Development (Anvil)
+## Security Considerations
 
-Other than writing unit tests (recommended!), you can only deploy & test hooks on [anvil](https://book.getfoundry.sh/anvil/)
+1. **Access Control**
+   - Ownable pattern for administrative functions
+   - Role-based access control for sensitive operations
+   - Whitelisting mechanism for privileged operations
 
-```bash
-# start anvil, a local EVM chain
-anvil
+2. **Price Oracle Security**
+   - Chainlink price feed integration
+   - Fallback mechanisms for oracle failures
+   - Price manipulation protection
 
-# in a new terminal
-forge script script/Anvil.s.sol \
-    --rpc-url http://localhost:8545 \
-    --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
-    --broadcast
-```
+3. **Smart Contract Safety**
+   - Reentrancy protection
+   - Integer overflow protection (Solidity ^0.8.x)
+   - Emergency pause functionality
 
-See [script/](script/) for hook deployment, pool creation, liquidity provision, and swapping.
+## License
 
----
+MIT License
 
-<details>
-<summary><h2>Troubleshooting</h2></summary>
+## Contributing
 
+Please read CONTRIBUTING.md for details on our code of conduct and the process for submitting pull requests.
 
+## Audits
 
-### *Permission Denied*
-
-When installing dependencies with `forge install`, Github may throw a `Permission Denied` error
-
-Typically caused by missing Github SSH keys, and can be resolved by following the steps [here](https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh) 
-
-Or [adding the keys to your ssh-agent](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent#adding-your-ssh-key-to-the-ssh-agent), if you have already uploaded SSH keys
-
-### Anvil fork test failures
-
-Some versions of Foundry may limit contract code size to ~25kb, which could prevent local tests to fail. You can resolve this by setting the `code-size-limit` flag
-
-```
-anvil --code-size-limit 40000
-```
-
-### Hook deployment failures
-
-Hook deployment failures are caused by incorrect flags or incorrect salt mining
-
-1. Verify the flags are in agreement:
-    * `getHookCalls()` returns the correct flags
-    * `flags` provided to `HookMiner.find(...)`
-2. Verify salt mining is correct:
-    * In **forge test**: the *deployer* for: `new Hook{salt: salt}(...)` and `HookMiner.find(deployer, ...)` are the same. This will be `address(this)`. If using `vm.prank`, the deployer will be the pranking address
-    * In **forge script**: the deployer must be the CREATE2 Proxy: `0x4e59b44847b379578588920cA78FbF26c0B4956C`
-        * If anvil does not have the CREATE2 deployer, your foundry may be out of date. You can update it with `foundryup`
-
-</details>
-
----
-
-Additional resources:
-
-[Uniswap v4 docs](https://docs.uniswap.org/contracts/v4/overview)
-
-[v4-periphery](https://github.com/uniswap/v4-periphery) contains advanced hook implementations that serve as a great reference
-
-[v4-core](https://github.com/uniswap/v4-core)
-
-[v4-by-example](https://v4-by-example.org)
+[Pending - Security audits will be conducted before mainnet deployment]
 
