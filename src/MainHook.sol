@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
 import {Hooks} from "v4-core/src/libraries/Hooks.sol";
+import {MEVArbitrage} from "src/mev/MEVArbitrage.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
@@ -103,12 +104,11 @@ contract MainHook is BaseHook, Ownable {
     ) internal override returns (bytes4) {
         (uint256 amount0, uint256 amount1) = _calculateLiquidityAmounts(key, params);
 
-        if (!kycContract.isPermitKYCModifyLiquidity(
-            amount0,
-            Currency.unwrap(key.currency0),
-            amount1,
-            Currency.unwrap(key.currency1)
-        )) {
+        if (
+            !kycContract.isPermitKYCModifyLiquidity(
+                amount0, Currency.unwrap(key.currency0), amount1, Currency.unwrap(key.currency1)
+            )
+        ) {
             revert NotPermitKYCAddLiquidity();
         }
 
@@ -123,12 +123,11 @@ contract MainHook is BaseHook, Ownable {
     ) internal override returns (bytes4) {
         (uint256 amount0, uint256 amount1) = _calculateLiquidityAmounts(key, params);
 
-        if (!kycContract.isPermitKYCModifyLiquidity(
-            amount0,
-            Currency.unwrap(key.currency0),
-            amount1,
-            Currency.unwrap(key.currency1)
-        )) {
+        if (
+            !kycContract.isPermitKYCModifyLiquidity(
+                amount0, Currency.unwrap(key.currency0), amount1, Currency.unwrap(key.currency1)
+            )
+        ) {
             revert NotPermitKYCRemoveLiquidity();
         }
 
@@ -165,13 +164,9 @@ contract MainHook is BaseHook, Ownable {
 
     function _getSwapExactToken(PoolKey calldata key, IPoolManager.SwapParams calldata params) internal pure returns (address) {
         if (params.zeroForOne) {
-            return params.amountSpecified > 0 
-                ? Currency.unwrap(key.currency1)
-                : Currency.unwrap(key.currency0);
+            return params.amountSpecified > 0 ? Currency.unwrap(key.currency1) : Currency.unwrap(key.currency0);
         } else {
-            return params.amountSpecified > 0
-                ? Currency.unwrap(key.currency0)
-                : Currency.unwrap(key.currency1);
+            return params.amountSpecified > 0 ? Currency.unwrap(key.currency0) : Currency.unwrap(key.currency1);
         }
     }
 
@@ -192,10 +187,7 @@ contract MainHook is BaseHook, Ownable {
 
         // Calculate amounts for the given liquidity
         (amount0, amount1) = LiquidityAmounts.getAmountsForLiquidity(
-            sqrtPriceX96,
-            sqrtPriceAX96,
-            sqrtPriceBX96,
-            uint128(uint256(params.liquidityDelta))
+            sqrtPriceX96, sqrtPriceAX96, sqrtPriceBX96, uint128(uint256(params.liquidityDelta))
         );
     }
 
